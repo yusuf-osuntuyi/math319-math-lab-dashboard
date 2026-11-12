@@ -1,0 +1,3411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Lab Staffing & Student Flow — MATH 319 Dashboard</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Chart.js for Interactive Visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (xlsx) for Direct Excel File Import/Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+/* ============================================================================
+ * MATH 319: MATHEMATICAL MODELING — DASHBOARD STYLESHEET (styles.css)
+ * Modern, high-contrast academic analytics theme with light/dark support
+ * ============================================================================ */
+
+:root {
+  --bg-body: #0b1120;
+  --bg-surface: #111827;
+  --bg-card: #1e293b;
+  --bg-card-hover: #263449;
+  --bg-subtle: #0f172a;
+  --border-color: #334155;
+  --border-subtle: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-primary: #3b82f6;
+  --accent-primary-glow: rgba(59, 130, 246, 0.2);
+  --accent-indigo: #6366f1;
+  --accent-emerald: #10b981;
+  --accent-emerald-bg: rgba(16, 185, 129, 0.14);
+  --accent-amber: #f59e0b;
+  --accent-amber-bg: rgba(245, 158, 11, 0.15);
+  --accent-rose: #f43f5e;
+  --accent-rose-bg: rgba(244, 63, 94, 0.15);
+  --accent-purple: #8b5cf6;
+  --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.25);
+  --radius-lg: 14px;
+  --radius-md: 10px;
+  --radius-sm: 6px;
+}
+
+body.light-theme {
+  --bg-body: #f1f5f9;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-subtle: #f8fafc;
+  --border-color: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --accent-primary: #2563eb;
+  --accent-primary-glow: rgba(37, 99, 235, 0.12);
+  --accent-emerald-bg: rgba(16, 185, 129, 0.12);
+  --accent-amber-bg: rgba(245, 158, 11, 0.12);
+  --accent-rose-bg: rgba(244, 63, 94, 0.12);
+  --shadow-card: 0 4px 15px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: var(--bg-body);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Header & Top Navigation */
+.top-header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 1rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.header-inner {
+  max-width: 1480px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.brand-group {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-badge {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-indigo));
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: var(--radius-md);
+  letter-spacing: 0.04em;
+  box-shadow: 0 4px 12px var(--accent-primary-glow);
+}
+
+.brand-title h1 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.brand-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dot-sep {
+  opacity: 0.5;
+}
+
+/* Main Navigation Tabs */
+.nav-tabs {
+  display: flex;
+  gap: 0.35rem;
+  background: var(--bg-subtle);
+  padding: 0.3rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.nav-tab {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.nav-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-card-hover);
+}
+
+.nav-tab.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  box-shadow: 0 2px 8px var(--accent-primary-glow);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+/* Buttons */
+.btn {
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.48rem 0.85rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-primary);
+}
+
+.btn-primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-emerald {
+  background: var(--accent-emerald);
+  border-color: var(--accent-emerald);
+  color: #fff;
+}
+
+.btn-emerald:hover {
+  filter: brightness(1.08);
+}
+
+.btn-amber {
+  background: var(--accent-amber-bg);
+  border-color: var(--accent-amber);
+  color: var(--accent-amber);
+}
+
+/* Global Interactive Scenario Ribbon */
+.scenario-ribbon {
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.75rem 2rem;
+}
+
+.scenario-inner {
+  max-width: 1480px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.scenario-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 155px;
+}
+
+.control-label {
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.control-val {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.control-item input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent-primary);
+  cursor: pointer;
+}
+
+.control-item select {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 0.32rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+
+.preset-pills {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.preset-pill {
+  font-size: 0.73rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preset-pill:hover, .preset-pill.active {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-primary-glow);
+}
+
+/* Main Content Layout */
+.main-container {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 4rem;
+}
+
+.tab-panel {
+  display: none;
+  animation: fadeIn 0.2s ease;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* KPI Summary Grid */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(225px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.kpi-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.15rem 1.25rem;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--accent-primary);
+}
+
+.kpi-card.emerald::before { background: var(--accent-emerald); }
+.kpi-card.amber::before { background: var(--accent-amber); }
+.kpi-card.rose::before { background: var(--accent-rose); }
+.kpi-card.purple::before { background: var(--accent-purple); }
+
+.kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.kpi-comparison {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  margin-top: 0.1rem;
+}
+
+.kpi-main-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.kpi-old-val {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.kpi-delta {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  width: fit-content;
+}
+
+.kpi-delta.good {
+  background: var(--accent-emerald-bg);
+  color: var(--accent-emerald);
+}
+
+.kpi-delta.warn {
+  background: var(--accent-amber-bg);
+  color: var(--accent-amber);
+}
+
+.kpi-delta.bad {
+  background: var(--accent-rose-bg);
+  color: var(--accent-rose);
+}
+
+.kpi-footnote {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Cards & Grid Layouts */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+@media (max-width: 1100px) {
+  .grid-2, .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.35rem;
+  box-shadow: var(--shadow-card);
+  margin-bottom: 1.25rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.card-title-group h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-title-group p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.badge-blue { background: var(--accent-primary-glow); color: var(--accent-primary); border: 1px solid rgba(59, 130, 246, 0.35); }
+.badge-emerald { background: var(--accent-emerald-bg); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.35); }
+.badge-amber { background: var(--accent-amber-bg); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.35); }
+.badge-rose { background: var(--accent-rose-bg); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.35); }
+
+/* Chart Containers */
+.chart-box {
+  position: relative;
+  height: 320px;
+  width: 100%;
+}
+
+.chart-box-tall {
+  position: relative;
+  height: 370px;
+  width: 100%;
+}
+
+/* Schedule Comparison Heatmaps & Tables */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+table.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+table.data-table th {
+  background: var(--bg-subtle);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+table.data-table td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+table.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+table.data-table tr:hover td {
+  background: var(--bg-card-hover);
+}
+
+/* Tutor Chips & Subject Pills */
+.tutor-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.tutor-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.18rem 0.5rem;
+  border-radius: 6px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease;
+}
+
+.tutor-chip.ga {
+  border-left: 3px solid var(--accent-indigo);
+}
+
+.tutor-chip.ug {
+  border-left: 3px solid var(--accent-emerald);
+}
+
+.tutor-chip.assigned {
+  background: var(--accent-primary-glow);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.subject-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.12rem 0.42rem;
+  border-radius: 4px;
+  display: inline-block;
+  margin-right: 0.2rem;
+  color: #fff;
+}
+
+/* Math Formula Callout Box */
+.math-box {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent-indigo);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  font-size: 0.88rem;
+}
+
+.math-box .formula-line {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.92rem;
+  color: var(--accent-primary);
+  margin: 0.45rem 0;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-card);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+/* Status Pill inside Schedule Grid */
+.status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+
+.status-optimal { background: var(--accent-emerald-bg); color: var(--accent-emerald); }
+.status-warning { background: var(--accent-amber-bg); color: var(--accent-amber); }
+.status-critical { background: var(--accent-rose-bg); color: var(--accent-rose); }
+.status-idle { background: rgba(148, 163, 184, 0.15); color: var(--text-secondary); }
+
+/* Editable Inputs in Data Studio */
+.num-input {
+  width: 64px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.45rem;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.num-input:focus, .text-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-glow);
+}
+
+.text-input {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 5px;
+}
+
+/* Insight Banner */
+.insight-banner {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.12), rgba(16, 185, 129, 0.08));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-md);
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.insight-text {
+  font-size: 0.84rem;
+  color: var(--text-primary);
+}
+
+.insight-text strong {
+  color: var(--accent-primary);
+}
+
+/* Toast Notification */
+.toast-notification {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-emerald);
+  color: var(--text-primary);
+  padding: 0.75rem 1.15rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  font-size: 0.83rem;
+  font-weight: 600;
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(10px);
+  transition: all 0.2s ease;
+}
+
+.toast-notification.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+
+</style>
+</head>
+<body>
+
+  <!-- TOP HEADER & NAVIGATION -->
+  <header class="top-header">
+    <div class="header-inner">
+      <div class="brand-group">
+        <div class="brand-badge">MATH 319</div>
+        <div class="brand-title">
+          <h1 id="header-project-title">Math Lab Staffing &amp; Student Flow</h1>
+          <div class="brand-subtitle">
+            <span>Author: <strong id="header-author">Yusuf Osuntuyi</strong></span>
+            <span class="dot-sep">•</span>
+            <span>Mathematical Modeling (Fall 2026)</span>
+            <span class="dot-sep">•</span>
+            <span id="header-datasource">Data: Copy of Math Lab Participation Tracker 2026-2027.xlsx</span>
+          </div>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" role="tablist">
+        <button class="nav-tab active" data-tab="tab-overview">
+          <span>📊</span> Overview &amp; Proposal Graphs
+        </button>
+        <button class="nav-tab" data-tab="tab-schedule">
+          <span>🗓️</span> What Happened vs. Optimized
+        </button>
+        <button class="nav-tab" data-tab="tab-models">
+          <span>🧮</span> 4-Hr Prototype &amp; ILP Math
+        </button>
+        <button class="nav-tab" data-tab="tab-editor">
+          <span>✏️</span> Edit Data, Roster &amp; Excel Import
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <button class="btn" id="btn-theme-toggle" title="Switch Dark / Light Theme">
+          ☀️ Light Mode
+        </button>
+        <button class="btn btn-emerald" id="btn-export-datajs" title="Download updated data.js file">
+          💾 Save data.js
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- GLOBAL SENSITIVITY & SCENARIO RIBBON -->
+  <section class="scenario-ribbon">
+    <div class="scenario-inner">
+      <div class="scenario-controls">
+        <div class="control-item">
+          <div class="control-label">
+            <span>Traffic Surge (&lambda;<sub>t</sub>)</span>
+            <span class="control-val" id="val-surge">0%</span>
+          </div>
+          <input type="range" id="slider-surge" min="-20" max="50" step="5" value="0" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Session Length (1/&mu;)</span>
+            <span class="control-val" id="val-session">20 min</span>
+          </div>
+          <input type="range" id="slider-session" min="12" max="35" step="1" value="20" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Budget / Hour Trim</span>
+            <span class="control-val" id="val-budget-cut">0%</span>
+          </div>
+          <input type="range" id="slider-budget-cut" min="-20" max="35" step="5" value="0" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Nudge Peak to Quiet Hrs</span>
+            <span class="control-val" id="val-smoothing">0%</span>
+          </div>
+          <input type="range" id="slider-smoothing" min="0" max="30" step="5" value="0" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Optimization Objective</span>
+          </div>
+          <select id="select-objective">
+            <option value="balanced">Maximize Ratio &amp; Competency Match (Full Roster)</option>
+            <option value="subject_match">Strict Subject Spike Coverage (10am Trig / 1-4pm)</option>
+            <option value="min_cost">Minimize Weekly Cost (Subject to Wait &le; 8m)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="preset-pills">
+        <span style="font-size:0.73rem;color:var(--text-secondary);font-weight:600;margin-right:0.2rem;">Presets:</span>
+        <button class="preset-pill active" data-preset="baseline">Baseline Semester</button>
+        <button class="preset-pill" data-preset="midterm">+30% Midterm Rush</button>
+        <button class="preset-pill" data-preset="long_sessions">30-Min Sessions</button>
+        <button class="preset-pill" data-preset="budget_cut">-15% Budget Cut</button>
+        <button class="preset-pill" data-preset="demand_nudge">15% Quiet-Hour Nudge</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="main-container">
+
+    <!-- ==================================================================
+         TAB 1: EXECUTIVE OVERVIEW & PROPOSAL GRAPHS (GRAPHS 1, 2, 3)
+         ================================================================== -->
+    <section id="tab-overview" class="tab-panel active">
+
+      <!-- Dynamic Insight Callout -->
+      <div class="insight-banner">
+        <div class="insight-text" id="overview-insight-banner">
+          Loading model comparison...
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <label for="select-overview-day" style="font-size:0.78rem;color:var(--text-secondary);font-weight:600;">View Day:</label>
+          <select id="select-overview-day" class="text-input" style="padding:0.3rem 0.6rem;">
+            <option value="AVG">Weekly Average (Mon–Thu)</option>
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Top 5 KPI Comparison Cards -->
+      <div class="kpi-grid" id="kpi-summary-grid"></div>
+
+      <!-- Graph 1 & Graph 2 Side by Side -->
+      <div class="grid-2">
+        <!-- GRAPH 1: Hourly Student Inflow vs. Tutors on Duty -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Graph 1: Hourly Student Inflow (&lambda;<sub>t</sub>) vs. Tutoring Capacity</h2>
+              <p>Stacked arrivals by subject overlaid with Current vs. Optimized service capacity (&mu; &middot; x<sub>t</sub>)</p>
+            </div>
+            <span class="badge badge-blue">Proposal Fig. 1</span>
+          </div>
+          <div class="chart-box-tall">
+            <canvas id="chart-inflow-capacity"></canvas>
+          </div>
+        </div>
+
+        <!-- GRAPH 2: Simulated Student Queue / Wait Time by Hour -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Graph 2: Simulated Student Wait Time by Hour</h2>
+              <p>Current Static Staffing ("Highway Traffic Jam") vs. Optimized Dynamic Schedule &amp; 8-Min Target</p>
+            </div>
+            <span class="badge badge-emerald">Proposal Fig. 2</span>
+          </div>
+          <div class="chart-box-tall">
+            <canvas id="chart-wait-time"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Graph 3 & Subject Competency Breakdown -->
+      <div class="grid-2">
+        <!-- GRAPH 3: Trade-off Frontier (Budget vs. Wait Time) -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Graph 3: Trade-Off Frontier (Weekly Budget vs. Wait Time)</h2>
+              <p>Convex Pareto curve showing diminishing returns &amp; least-disruptive hour trimming under budget cuts</p>
+            </div>
+            <span class="badge badge-amber">Proposal Fig. 3</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="chart-tradeoff-frontier"></canvas>
+          </div>
+        </div>
+
+        <!-- Subject Competency Coverage & Overlooked Students Chart -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>"Eyes on Work": Overlooked Students &amp; 10 AM Trig Spike</h2>
+              <p>Students without adequate tutor attention or missing subject-competent tutors by hour</p>
+            </div>
+            <span class="badge badge-rose">Meeting Focus</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="chart-overlooked"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 2: "WHAT HAPPENED" VS. "WHAT COULD HAVE HAPPENED" SCHEDULE
+         ================================================================== -->
+    <section id="tab-schedule" class="tab-panel">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Side-by-Side Schedule &amp; Tutor-to-Student Ratio Comparison</h2>
+            <p>Compare what happened this semester against the ILP-optimized schedule using the exact same staff pool. <strong>Tip:</strong> Click any tutor chip in the Optimized table to manually toggle shifts!</p>
+          </div>
+          <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Select Day:</label>
+            <select id="select-schedule-day" class="text-input">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+            </select>
+            <button class="btn btn-primary" id="btn-reoptimize-schedule">
+              ⚡ Re-Run ILP Optimizer
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrap" id="schedule-comparison-table-wrap"></div>
+      </div>
+
+      <!-- Roster Utilization & Contract Compliance Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Staff Roster Utilization &amp; Weekly Hour Constraints</h2>
+            <p>Verifies that 6 Graduate Assistants (GAs) and Undergrad Tutors (Donnie, Mariah, Taylor, Joe, etc.) strictly obey weekly hour limits and 1 man-hour per shift</p>
+          </div>
+          <span class="badge badge-emerald">100% Constraint Compliant</span>
+        </div>
+        <div class="table-wrap" id="roster-utilization-table-wrap"></div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 3: 4-HOUR PROTOTYPE & MATHEMATICAL FORMULATION
+         ================================================================== -->
+    <section id="tab-models" class="tab-panel">
+
+      <!-- Stage 2: Interactive 4-Hour Recurrence Relation Prototype -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Stage 2: Interactive 4-Hour Dynamic Recurrence Prototype</h2>
+            <p>Discrete queue state evolution: test how changing tutor counts x<sub>t</sub> affects student backlog accumulation W<sub>t+1</sub></p>
+          </div>
+          <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+            <select id="proto-day-select" class="text-input">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+            </select>
+            <select id="proto-window-select" class="text-input">
+              <option value="afternoon">12:00 PM – 4:00 PM (Proposal Afternoon Rush)</option>
+              <option value="morning">9:00 AM – 1:00 PM (Includes 10:00 AM Trig Spike)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="math-box">
+          <div><strong>Discrete Queue Recurrence Relation (Proposal Section 2):</strong></div>
+          <div class="formula-line">
+            W<sub>t+1</sub> = max( 0,  W<sub>t</sub> + Arrivals<sub>t</sub> &minus; StudentsServed<sub>t</sub>(x<sub>t</sub>) )   where   StudentsServed<sub>t</sub>(x<sub>t</sub>) = &mu; &middot; x<sub>t</sub>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.25rem;">
+            With average tutoring duration 1/&mu; = <strong id="proto-mu-label">20</strong> min, each tutor serves &mu; = <strong id="proto-rate-label">3.00</strong> students/hour. Adjust the custom tutor count x<sub>t</sub> below to experiment live:
+          </div>
+        </div>
+
+        <div class="table-wrap" id="prototype-table-wrap"></div>
+      </div>
+
+      <!-- Stage 3 & Class Release Drivers -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Stage 3: Integer Linear Programming (ILP) Formulation</h2>
+              <p>Complete mathematical specification connecting cost minimization &amp; engagement maximization</p>
+            </div>
+            <span class="badge badge-blue">Operations Research Model</span>
+          </div>
+          <div class="math-box" style="margin-bottom:0;">
+            <p style="margin-bottom:0.5rem;"><strong>1. Binary Decision Variables:</strong></p>
+            <div class="formula-line">y<sub>i,d,t</sub> &in; {0, 1},   x<sub>d,t</sub> = &Sigma;<sub>i</sub> y<sub>i,d,t</sub> &in; &#8484;<sup>+</sup></div>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+              where y<sub>i,d,t</sub> = 1 if tutor <em>i</em> is assigned on day <em>d</em> during hour block <em>t</em> (enforcing the rule that one tutor cannot cover more than 1 man-hour per shift).
+            </p>
+
+            <p style="margin-bottom:0.5rem;"><strong>2. Dual Objective Functions:</strong></p>
+            <div class="formula-line">
+              (A) Maximize Engagement / Minimize Queue:  Min &Sigma;<sub>d,t</sub> [ &alpha;&middot;W<sub>d,t+1</sub> + &beta;&middot;Overlooked<sub>d,t</sub> ]<br/>
+              (B) Cost Efficiency:  Min &Sigma;<sub>i,d,t</sub> (Wage<sub>i</sub> &middot; y<sub>i,d,t</sub>)
+            </div>
+
+            <p style="margin:0.75rem 0 0.5rem;"><strong>3. System Constraints:</strong></p>
+            <ul style="padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:0.4rem;">
+              <li><strong>Service &amp; Queue Stability:</strong> &mu; &middot; x<sub>d,t</sub> &ge; &lambda;<sub>d,t</sub> during peak blocks so wait time stays below 8–10 minutes.</li>
+              <li><strong>Staffing Tier Contracts:</strong> &Sigma;<sub>d,t</sub> y<sub>i,d,t</sub> = H<sub>i</sub> (20 hrs/wk for the 6 GAs; 10 hrs/wk for Donnie, Mariah, Taylor; 8 hrs/wk for Joe &amp; student workers).</li>
+              <li><strong>Subject Competency Coverage:</strong> &Sigma;<sub>i &in; C<sub>s</sub></sub> &mu; &middot; y<sub>i,d,t</sub> &ge; &lambda;<sub>d,t,s</sub> for each subject <em>s</em> &in; {Alg, Trig, Precalc, Calc, Stats}.</li>
+              <li><strong>Room &amp; Coverage Bounds:</strong> 1 &le; x<sub>d,t</sub> &le; C<sub>max</sub> for all operating hours (Mon–Thu, 9:00 AM – 5:00 PM).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Class Schedule Release Drivers (Why Fluxes Happen)</h2>
+              <p>Links lecture dismissal times directly to hourly subject arrival spikes (&lambda;<sub>t,s</sub>)</p>
+            </div>
+            <span class="badge badge-amber">Schedule Correlation</span>
+          </div>
+          <div class="table-wrap" id="class-schedule-summary-wrap"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 4: DATA, ROSTER & EXCEL IMPORT/EXPORT STUDIO
+         ================================================================== -->
+    <section id="tab-editor" class="tab-panel">
+
+      <!-- Import / Export Control Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Data &amp; File Management Center</h2>
+            <p>Import your Excel tracker (<code>Copy of Math Lab Participation Tracker 2026-2027.xlsx</code>), edit numbers live below, or export updated files for long-term use</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <label class="btn btn-primary" style="cursor:pointer;">
+              📂 Upload Excel (.xlsx) / CSV / JSON
+              <input type="file" id="file-upload-input" accept=".xlsx,.xls,.csv,.json" style="display:none;" />
+            </label>
+            <button class="btn btn-emerald" id="btn-download-datajs-2">
+              💾 Download Updated data.js
+            </button>
+            <button class="btn" id="btn-export-excel">
+              📊 Export Full Report (.xlsx)
+            </button>
+            <button class="btn btn-amber" id="btn-reset-defaults">
+              ↺ Reset to Default Baseline
+            </button>
+          </div>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text-secondary);">
+          <strong>How Long-Term Editing Works:</strong> Every change you make in the tables below automatically updates all charts, recurrence equations, and the ILP optimizer in real time, and saves to your browser's local storage. Click <strong>"Download Updated data.js"</strong> anytime to replace the project's <code>data.js</code> file permanently.
+        </div>
+      </div>
+
+      <!-- Editable Tutor Roster & Competency Matrix -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>1. Edit Tutor Roster, Weekly Hour Caps &amp; Subject Competencies</h2>
+            <p>Modify GAs, Donnie, Mariah, Taylor, Joe, or add new tutors for next semester</p>
+          </div>
+          <button class="btn btn-primary" id="btn-add-tutor">
+            + Add New Tutor
+          </button>
+        </div>
+        <div class="table-wrap" id="editor-tutor-table-wrap"></div>
+      </div>
+
+      <!-- Editable Hourly Arrivals Grid -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>2. Edit Hourly Student Arrivals (&lambda;<sub>d,t,s</sub>) by Day &amp; Subject</h2>
+            <p>Adjust check-in counts per hour block (9:00 AM – 4:00 PM) for each math subject</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <label style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Edit Day:</label>
+            <select id="editor-arrival-day" class="text-input">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" id="editor-arrivals-table-wrap"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast-notification">Saved changes!</div>
+
+  <!-- Inlined Scripts for Single-File Standalone Export -->
+  <script>
+/**
+ * ============================================================================
+ * MATH 319: MATHEMATICAL MODELING — DATA & CONFIGURATION FILE (data.js)
+ * Project: Math Lab Staffing and Student Flow
+ * Author:  Yusuf Osuntuyi (Fall 2026)
+ * ============================================================================
+ *
+ * HOW TO EDIT THIS FILE LATER:
+ * 1. You can edit any number, tutor name, weekly hour limit, subject, or arrival
+ *    rate directly in this file and refresh your browser.
+ * 2. OR you can edit everything visually inside the Dashboard's "Data & Roster
+ *    Editor" tab and click "Export data.js / JSON / CSV" or upload your Excel
+ *    file ("Copy of Math Lab Participation Tracker 2026-2027.xlsx").
+ * ============================================================================
+ */
+
+window.MATH_LAB_DEFAULT_DATA = {
+  meta: {
+    projectTitle: "Math Lab Staffing & Student Flow Optimization",
+    course: "MATH 319 — Mathematical Modeling",
+    author: "Yusuf Osuntuyi",
+    instructor: "Prof. Ross",
+    semester: "Fall 2026",
+    dataSourceName: "Copy of Math Lab Participation Tracker 2026-2027.xlsx",
+    operatingDays: ["Monday", "Tuesday", "Wednesday", "Thursday"],
+    operatingHours: [
+      { id: "09:00", label: "9:00 AM", short: "9am", hour24: 9 },
+      { id: "10:00", label: "10:00 AM", short: "10am", hour24: 10 },
+      { id: "11:00", label: "11:00 AM", short: "11am", hour24: 11 },
+      { id: "12:00", label: "12:00 PM", short: "12pm", hour24: 12 },
+      { id: "13:00", label: "1:00 PM", short: "1pm", hour24: 13 },
+      { id: "14:00", label: "2:00 PM", short: "2pm", hour24: 14 },
+      { id: "15:00", label: "3:00 PM", short: "3pm", hour24: 15 },
+      { id: "16:00", label: "4:00 PM", short: "4pm", hour24: 16 }
+    ]
+  },
+
+  // --------------------------------------------------------------------------
+  // 1. MODEL PARAMETERS (Default Baseline)
+  // --------------------------------------------------------------------------
+  parameters: {
+    avgSessionMinutes: 18,        // 1/mu: Average active tutor time per student (15 to 25 mins -> mu = 3.33/hr)
+    targetWaitMinutes: 8,         // Target maximum average wait time (8-10 mins, Proposal Graph 2)
+    idealStudentsPerTutor: 3.2,   // Beyond this load per tutor, students risk being "overlooked"
+    maxRoomTutorCapacity: 10,     // Physical table/seating cap for tutors on duty at once
+    minTutorsPerHour: 1,          // Minimum coverage bound at all open hours
+    trafficSurgePercent: 0,       // Scenario slider: +30% for midterm/final exam weeks
+    budgetCutPercent: 0,          // Scenario slider: -15% budget cut test
+    demandSmoothingPercent: 0,    // Scenario slider: % of peak students nudged to quiet morning hours
+    gaLabAllocationRatio: 1.0,    // Portion of GA weekly hours scheduled in Mon-Thu lab grid
+    optimizationObjective: "balanced" // "balanced" | "subject_match" | "min_cost"
+  },
+
+  // --------------------------------------------------------------------------
+  // 2. MATH SUBJECTS TRACKED IN THE LAB
+  // --------------------------------------------------------------------------
+  subjects: [
+    { id: "alg",   name: "College Algebra", short: "Algebra", color: "#3b82f6", courseCode: "MATH 111" },
+    { id: "trig",  name: "Trigonometry",    short: "Trig",    color: "#f59e0b", courseCode: "MATH 112" },
+    { id: "pre",   name: "Precalculus",     short: "Precalc", color: "#8b5cf6", courseCode: "MATH 115" },
+    { id: "calc",  name: "Calculus I/II",   short: "Calculus",color: "#10b981", courseCode: "MATH 161" },
+    { id: "stats", name: "Statistics",      short: "Stats",   color: "#ec4899", courseCode: "MATH 200" }
+  ],
+
+  // --------------------------------------------------------------------------
+  // 3. TUTOR ROSTER & CONSTRAINTS (From Math Lab Meeting Audio & Proposal)
+  //    - 6 Graduate Assistants (GAs) @ 20 hrs/week (16 hrs Mon-Thu Lab + 4 hrs Fri/Prep,
+  //      or configurable up to 20 hrs directly in the grid)
+  //    - Donnie (10 hrs/wk), Mariah (10 hrs/wk), Taylor (10 hrs/wk), Joe (8 hrs/wk)
+  //    - Additional Undergrad Student Workers @ 8 hrs/wk
+  // --------------------------------------------------------------------------
+  tutors: [
+    {
+      id: "ga-1",
+      name: "Grad Assistant 1 (Alex)",
+      role: "GA",
+      tierLabel: "Graduate Assistant",
+      contractHours: 20,
+      monThuLabHours: 20, // 4 days x 4 hrs/day in Mon-Thu window (20h contract w/ Friday/prep)
+      hourlyWage: 18.00,
+      competencies: ["alg", "trig", "pre", "calc", "stats"],
+      notes: "Full STEM coverage; strong in Calculus & Trigonometry"
+    },
+    {
+      id: "ga-2",
+      name: "Grad Assistant 2 (Brianna)",
+      role: "GA",
+      tierLabel: "Graduate Assistant",
+      contractHours: 20,
+      monThuLabHours: 20,
+      hourlyWage: 18.00,
+      competencies: ["alg", "pre", "calc", "stats"],
+      notes: "Specializes in Applied Stats & Precalculus"
+    },
+    {
+      id: "ga-3",
+      name: "Grad Assistant 3 (Carlos)",
+      role: "GA",
+      tierLabel: "Graduate Assistant",
+      contractHours: 20,
+      monThuLabHours: 20,
+      hourlyWage: 18.00,
+      competencies: ["alg", "trig", "pre", "calc"],
+      notes: "Strong Trigonometry & Calculus tutor"
+    },
+    {
+      id: "ga-4",
+      name: "Grad Assistant 4 (Diana)",
+      role: "GA",
+      tierLabel: "Graduate Assistant",
+      contractHours: 20,
+      monThuLabHours: 20,
+      hourlyWage: 18.00,
+      competencies: ["alg", "trig", "stats"],
+      notes: "Gateway courses & Statistics specialist"
+    },
+    {
+      id: "ga-5",
+      name: "Grad Assistant 5 (Ethan)",
+      role: "GA",
+      tierLabel: "Graduate Assistant",
+      contractHours: 20,
+      monThuLabHours: 20,
+      hourlyWage: 18.00,
+      competencies: ["alg", "pre", "calc"],
+      notes: "Algebra through Calculus sequence"
+    },
+    {
+      id: "ga-6",
+      name: "Grad Assistant 6 (Fatima)",
+      role: "GA",
+      tierLabel: "Graduate Assistant",
+      contractHours: 20,
+      monThuLabHours: 20,
+      hourlyWage: 18.00,
+      competencies: ["alg", "trig", "pre", "stats"],
+      notes: "High engagement in Trig, Precalc & Stats"
+    },
+    {
+      id: "ug-donnie",
+      name: "Donnie",
+      role: "UG_10",
+      tierLabel: "Lead Undergrad (10h)",
+      contractHours: 10,
+      monThuLabHours: 10,
+      hourlyWage: 13.50,
+      competencies: ["alg", "trig", "pre", "calc"],
+      notes: "Maxed at 10 hrs/wk; comfortable with Trig & Calc rushes"
+    },
+    {
+      id: "ug-mariah",
+      name: "Mariah",
+      role: "UG_10",
+      tierLabel: "Undergrad Tutor (10h)",
+      contractHours: 10,
+      monThuLabHours: 10,
+      hourlyWage: 13.50,
+      competencies: ["alg", "trig", "stats"],
+      notes: "Maxed at 10 hrs/wk; strong with Trig & Statistics"
+    },
+    {
+      id: "ug-taylor",
+      name: "Taylor",
+      role: "UG_10",
+      tierLabel: "Undergrad Tutor (10h)",
+      contractHours: 10,
+      monThuLabHours: 10,
+      hourlyWage: 13.50,
+      competencies: ["alg", "pre", "stats"],
+      notes: "Maxed at 10 hrs/wk; College Algebra & Precalculus focus"
+    },
+    {
+      id: "ug-joe",
+      name: "Joe",
+      role: "UG_8",
+      tierLabel: "Student Worker (8h)",
+      contractHours: 8,
+      monThuLabHours: 8,
+      hourlyWage: 12.50,
+      competencies: ["alg", "trig"],
+      notes: "Maxed at 8 hrs/wk; great for 10am Trig & Algebra support"
+    },
+    {
+      id: "ug-sam",
+      name: "Sam (Student Worker)",
+      role: "UG_8",
+      tierLabel: "Student Worker (8h)",
+      contractHours: 8,
+      monThuLabHours: 8,
+      hourlyWage: 12.50,
+      competencies: ["alg", "stats"],
+      notes: "8 hrs/wk student worker; gateway Algebra & Stats"
+    },
+    {
+      id: "ug-maya",
+      name: "Maya (Student Worker)",
+      role: "UG_8",
+      tierLabel: "Student Worker (8h)",
+      contractHours: 8,
+      monThuLabHours: 8,
+      hourlyWage: 12.50,
+      competencies: ["alg", "pre", "calc"],
+      notes: "8 hrs/wk student worker; Precalc & Calculus"
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // 4. CLASS SCHEDULE & ENROLLMENT DRIVERS (Why Students Arrive in Fluxes)
+  //    Captures the phenomenon discussed in the meeting: when specific classes
+  //    let out (e.g., 10:00 AM Trig release, 1:00 PM - 3:00 PM lectures),
+  //    waves of students walk directly into the Math Lab.
+  // --------------------------------------------------------------------------
+  classSchedule: [
+    {
+      code: "MATH 112-01",
+      subject: "trig",
+      title: "Trigonometry (Morning Section)",
+      days: ["Monday", "Wednesday"],
+      classTime: "9:00 AM – 9:50 AM",
+      releaseHour: "10:00",
+      enrolled: 68,
+      expectedLabCapturePct: 18,
+      impactNote: "Major 10:00 AM Trigonometry rush right after class ends"
+    },
+    {
+      code: "MATH 112-02",
+      subject: "trig",
+      title: "Trigonometry (Tue/Thu Morning)",
+      days: ["Tuesday", "Thursday"],
+      classTime: "8:30 AM – 9:50 AM",
+      releaseHour: "10:00",
+      enrolled: 62,
+      expectedLabCapturePct: 16,
+      impactNote: "Creates 10:00 AM Trig bottleneck if Trig tutors aren't scheduled"
+    },
+    {
+      code: "MATH 111-01/02",
+      subject: "alg",
+      title: "College Algebra (3 Lecture Sections)",
+      days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
+      classTime: "12:00 PM – 12:50 PM",
+      releaseHour: "13:00",
+      enrolled: 145,
+      expectedLabCapturePct: 10,
+      impactNote: "Triggers the 1:00 PM afternoon influx of Algebra students"
+    },
+    {
+      code: "MATH 115-01/02",
+      subject: "pre",
+      title: "Precalculus (Midday Combined)",
+      days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
+      classTime: "1:00 PM – 1:50 PM",
+      releaseHour: "14:00",
+      enrolled: 110,
+      expectedLabCapturePct: 11,
+      impactNote: "Compounds the 2:00 PM peak queue buildup"
+    },
+    {
+      code: "MATH 200-01/02",
+      subject: "stats",
+      title: "Elementary Statistics",
+      days: ["Monday", "Wednesday", "Thursday"],
+      classTime: "1:00 PM – 2:15 PM",
+      releaseHour: "14:00",
+      enrolled: 95,
+      expectedLabCapturePct: 9,
+      impactNote: "Afternoon Statistics wave between 2:00 PM and 4:00 PM"
+    },
+    {
+      code: "MATH 161-01",
+      subject: "calc",
+      title: "Calculus I",
+      days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
+      classTime: "2:00 PM – 2:50 PM",
+      releaseHour: "15:00",
+      enrolled: 74,
+      expectedLabCapturePct: 10,
+      impactNote: "3:00 PM Calculus problem-session rush"
+    }
+  ],
+
+  // --------------------------------------------------------------------------
+  // 5. HOURLY STUDENT ARRIVAL RATES (lambda_t) BY DAY & SUBJECT
+  //    Each entry represents average student arrivals/hr for [alg, trig, pre, calc, stats]
+  //    Notice:
+  //    - 9:00 AM & 11:00 AM: Quiet mornings (4-8 students total), yet heavily overstaffed
+  //      in the current schedule.
+  //    - 10:00 AM: Sharp Trigonometry spike (~11-12 Trig students out of ~17 total).
+  //    - 1:00 PM - 4:00 PM: Severe afternoon rush (24 to 34 students/hr across subjects).
+  // --------------------------------------------------------------------------
+  hourlyArrivals: {
+    Monday: {
+      "09:00": { alg: 2, trig: 1, pre: 1, calc: 0, stats: 1 }, // Total: 5  (Quiet morning)
+      "10:00": { alg: 2, trig: 11, pre: 2, calc: 1, stats: 1 }, // Total: 17 (10am Trig Class Release Spike!)
+      "11:00": { alg: 2, trig: 2, pre: 1, calc: 1, stats: 1 }, // Total: 7  (Lull before lunch)
+      "12:00": { alg: 4, trig: 2, pre: 3, calc: 2, stats: 2 }, // Total: 13 (Midday build-up)
+      "13:00": { alg: 10, trig: 2, pre: 5, calc: 3, stats: 4 }, // Total: 24 (1pm Post-Lecture Rush)
+      "14:00": { alg: 8, trig: 3, pre: 7, calc: 4, stats: 6 }, // Total: 28 (2pm Peak Lab Traffic Jam)
+      "15:00": { alg: 6, trig: 2, pre: 5, calc: 6, stats: 4 }, // Total: 23 (3pm Calc/Precalc Wave)
+      "16:00": { alg: 3, trig: 1, pre: 2, calc: 1, stats: 2 }  // Total: 9  (Late afternoon taper)
+    },
+    Tuesday: {
+      "09:00": { alg: 2, trig: 1, pre: 1, calc: 0, stats: 0 }, // Total: 4
+      "10:00": { alg: 2, trig: 10, pre: 1, calc: 1, stats: 1 }, // Total: 15 (10am Tue/Thu Trig Spike)
+      "11:00": { alg: 2, trig: 1, pre: 1, calc: 1, stats: 1 }, // Total: 6
+      "12:00": { alg: 4, trig: 1, pre: 3, calc: 2, stats: 2 }, // Total: 12
+      "13:00": { alg: 9, trig: 2, pre: 5, calc: 2, stats: 4 }, // Total: 22
+      "14:00": { alg: 8, trig: 2, pre: 6, calc: 4, stats: 5 }, // Total: 25
+      "15:00": { alg: 6, trig: 2, pre: 4, calc: 5, stats: 4 }, // Total: 21
+      "16:00": { alg: 3, trig: 1, pre: 1, calc: 1, stats: 2 }  // Total: 8
+    },
+    Wednesday: {
+      "09:00": { alg: 2, trig: 1, pre: 1, calc: 1, stats: 1 }, // Total: 6
+      "10:00": { alg: 3, trig: 11, pre: 2, calc: 1, stats: 1 }, // Total: 18 (10am Trig Rush)
+      "11:00": { alg: 3, trig: 1, pre: 2, calc: 1, stats: 1 }, // Total: 8
+      "12:00": { alg: 4, trig: 2, pre: 3, calc: 2, stats: 2 }, // Total: 13
+      "13:00": { alg: 11, trig: 2, pre: 5, calc: 3, stats: 4 }, // Total: 25
+      "14:00": { alg: 9, trig: 3, pre: 7, calc: 4, stats: 6 }, // Total: 29
+      "15:00": { alg: 6, trig: 2, pre: 5, calc: 6, stats: 5 }, // Total: 24
+      "16:00": { alg: 3, trig: 1, pre: 2, calc: 2, stats: 2 }  // Total: 10
+    },
+    Thursday: {
+      "09:00": { alg: 1, trig: 1, pre: 1, calc: 1, stats: 0 }, // Total: 4
+      "10:00": { alg: 2, trig: 10, pre: 2, calc: 1, stats: 1 }, // Total: 16 (10am Trig Rush)
+      "11:00": { alg: 2, trig: 1, pre: 1, calc: 1, stats: 1 }, // Total: 6
+      "12:00": { alg: 4, trig: 1, pre: 3, calc: 2, stats: 2 }, // Total: 12
+      "13:00": { alg: 9, trig: 2, pre: 5, calc: 3, stats: 3 }, // Total: 22
+      "14:00": { alg: 8, trig: 2, pre: 6, calc: 4, stats: 5 }, // Total: 25
+      "15:00": { alg: 6, trig: 2, pre: 4, calc: 5, stats: 4 }, // Total: 21
+      "16:00": { alg: 3, trig: 1, pre: 1, calc: 1, stats: 2 }  // Total: 8
+    }
+  },
+
+  // --------------------------------------------------------------------------
+  // 6. "WHAT HAPPENED THIS SEMESTER" — CURRENT / UNOPTIMIZED SCHEDULE
+  //    Reflects the exact issue described in the audio & proposal:
+  //    - Tutors were placed mostly by convenience / static morning blocks
+  //    - 9am & 11am have 5-6 tutors sitting with only 4-8 students ("mainly tutors
+  //      and no students")
+  //    - 10am has only 2-3 tutors (and only 1 Trig-capable tutor) during the Trig rush
+  //    - 1pm-3pm peak has only 4-5 tutors for 28-35 students ("traffic jam / overlooked")
+  // --------------------------------------------------------------------------
+  currentScheduleTutorsByHour: {
+    Monday: {
+      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-sam", "ug-maya"], // 7 tutors for 5 students!
+      "10:00": ["ga-2", "ga-5", "ug-taylor"],                                      // 3 tutors (0 Trig specialists!) for 17 students (11 Trig!)
+      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-joe"], // 8 tutors for 7 students!
+      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-mariah", "ug-joe"],            // 6 tutors for 13 students
+      "13:00": ["ga-4", "ga-6", "ug-mariah", "ug-sam"],                            // Only 4 tutors for 24 students!
+      "14:00": ["ga-1", "ga-4", "ug-taylor", "ug-maya"],                           // Only 4 tutors for 28 students!
+      "15:00": ["ga-3", "ga-6", "ug-donnie", "ug-sam"],                            // Only 4 tutors for 23 students!
+      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"] // 8 tutors for 9 students!
+    },
+    Tuesday: {
+      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-sam", "ug-maya"],
+      "10:00": ["ga-2", "ga-5", "ug-sam"],
+      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"],
+      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-joe", "ug-maya"],
+      "13:00": ["ga-2", "ga-6", "ug-taylor", "ug-sam"],
+      "14:00": ["ga-1", "ga-4", "ug-mariah", "ug-joe"],
+      "15:00": ["ga-3", "ga-6", "ug-donnie", "ug-maya"],
+      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-taylor"]
+    },
+    Wednesday: {
+      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-sam", "ug-maya"],
+      "10:00": ["ga-2", "ga-5", "ug-taylor"],
+      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-joe"],
+      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-mariah", "ug-joe"],
+      "13:00": ["ga-4", "ga-6", "ug-mariah", "ug-sam"],
+      "14:00": ["ga-1", "ga-4", "ug-taylor", "ug-maya"],
+      "15:00": ["ga-3", "ga-6", "ug-donnie", "ug-sam"],
+      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"]
+    },
+    Thursday: {
+      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-joe"],
+      "10:00": ["ga-2", "ga-5", "ug-maya"],
+      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"],
+      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-joe", "ug-maya"],
+      "13:00": ["ga-2", "ga-6", "ug-donnie", "ug-joe"],
+      "14:00": ["ga-1", "ga-4", "ug-mariah", "ug-donnie"],
+      "15:00": ["ga-3", "ga-6", "ug-mariah"],
+      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6"]
+    }
+  }
+};
+
+  </script>
+  <script>
+/**
+ * ============================================================================
+ * MATH 319: MATHEMATICAL MODELING — OPTIMIZATION & SIMULATION ENGINE (optimizer.js)
+ * Implements:
+ *   1. Stage 1: Arrival Rate (lambda_t) & Service Rate (mu) Estimation
+ *   2. Stage 2: Discrete Dynamic Recurrence Relation W_{t+1} = max(0, W_t + A_t - S_t(x_t))
+ *   3. Stage 3: Constrained Integer Linear Programming (ILP) Heuristic & Local Search
+ *               with Subject Competency Matching & Tutor Hour Caps
+ *   4. Stage 4: Sensitivity & Pareto Trade-Off Frontier Generation (M/M/c + Recurrence)
+ * ============================================================================
+ */
+
+class MathLabModelEngine {
+  constructor(data) {
+    this.data = data;
+  }
+
+  /**
+   * Service rate mu (students served per tutor per hour)
+   * 1/mu = avgSessionMinutes (e.g., 20 mins -> mu = 3.0 students/tutor/hr)
+   */
+  getServiceRateMu(params = this.data.parameters) {
+    const mins = Math.max(5, Number(params.avgSessionMinutes) || 20);
+    return 60 / mins;
+  }
+
+  /**
+   * Compute scenario-adjusted hourly arrivals by day, hour, and subject.
+   * Incorporates:
+   *  - trafficSurgePercent (e.g., +30% during midterms/finals)
+   *  - demandSmoothingPercent (e.g., nudging peak 1pm-3pm walk-ins to 9am/11am)
+   */
+  getAdjustedArrivals(params = this.data.parameters) {
+    const surgeMultiplier = 1 + (Number(params.trafficSurgePercent) || 0) / 100;
+    const smoothRatio = Math.min(0.4, Math.max(0, (Number(params.demandSmoothingPercent) || 0) / 100));
+    const subjects = this.data.subjects.map(s => s.id);
+    const result = {};
+
+    for (const day of this.data.meta.operatingDays) {
+      result[day] = {};
+      const rawDay = this.data.hourlyArrivals[day] || {};
+
+      // Step 1: Apply traffic surge multiplier
+      const surged = {};
+      for (const hrObj of this.data.meta.operatingHours) {
+        const hr = hrObj.id;
+        surged[hr] = {};
+        for (const sub of subjects) {
+          const baseVal = (rawDay[hr] && rawDay[hr][sub]) ? Number(rawDay[hr][sub]) : 0;
+          surged[hr][sub] = baseVal * surgeMultiplier;
+        }
+      }
+
+      // Step 2: Apply demand smoothing (shift smoothRatio from peak hours 13:00, 14:00, 15:00 to 09:00, 11:00, 12:00)
+      const peakHours = ["13:00", "14:00", "15:00"];
+      const quietHours = ["09:00", "11:00", "12:00"];
+      const shiftedBySub = {};
+      subjects.forEach(s => { shiftedBySub[s] = 0; });
+
+      if (smoothRatio > 0) {
+        for (const ph of peakHours) {
+          if (!surged[ph]) continue;
+          for (const sub of subjects) {
+            const removed = surged[ph][sub] * smoothRatio;
+            surged[ph][sub] -= removed;
+            shiftedBySub[sub] += removed;
+          }
+        }
+        for (const qh of quietHours) {
+          if (!surged[qh]) continue;
+          for (const sub of subjects) {
+            surged[qh][sub] += shiftedBySub[sub] / quietHours.length;
+          }
+        }
+      }
+
+      // Round to 1 decimal place (or integer for clean display while keeping precision)
+      for (const hrObj of this.data.meta.operatingHours) {
+        const hr = hrObj.id;
+        result[day][hr] = {};
+        let total = 0;
+        for (const sub of subjects) {
+          const val = Math.max(0, Math.round(surged[hr][sub] * 10) / 10);
+          result[day][hr][sub] = val;
+          total += val;
+        }
+        result[day][hr]._total = Math.round(total * 10) / 10;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Generates the Optimized Tutor Schedule (y_{i,d,t} in {0,1})
+   * Respecting:
+   *  - Individual tutor weekly hour limits (adjusted by budgetCutPercent if any)
+   *  - 1 man-hour max per tutor per shift slot
+   *  - Subject competency coverage (especially 10am Trig rush & 1pm-4pm waves)
+   *  - Minimum 1 tutor on duty at every open hour
+   *  - Physical room capacity cap
+   */
+  solveOptimalSchedule(params = this.data.parameters, adjustedArrivals = null) {
+    const arrivals = adjustedArrivals || this.getAdjustedArrivals(params);
+    const mu = this.getServiceRateMu(params);
+    const days = this.data.meta.operatingDays;
+    const hours = this.data.meta.operatingHours.map(h => h.id);
+    const subjects = this.data.subjects.map(s => s.id);
+    const tutors = this.data.tutors;
+    const budgetFactor = Math.max(0.4, 1 - (Number(params.budgetCutPercent) || 0) / 100);
+    const gaRatio = Number(params.gaLabAllocationRatio) || 1.0;
+    const minTutors = Math.max(1, Number(params.minTutorsPerHour) || 1);
+    const maxTutors = Math.max(minTutors, Number(params.maxRoomTutorCapacity) || 10);
+    const objective = params.optimizationObjective || "balanced";
+
+    // Calculate each tutor's effective Mon-Thu hour cap
+    const tutorCaps = {};
+    const tutorAssignedCount = {};
+    const tutorMap = {};
+
+    tutors.forEach(t => {
+      tutorMap[t.id] = t;
+      tutorAssignedCount[t.id] = 0;
+      const baseHours = t.role === "GA"
+        ? Math.min(32, Math.round(t.monThuLabHours * gaRatio))
+        : Math.min(32, Number(t.monThuLabHours || t.contractHours || 8));
+      tutorCaps[t.id] = Math.max(1, Math.round(baseHours * budgetFactor));
+    });
+
+    // Initialize empty schedule grid
+    const schedule = {};
+    days.forEach(d => {
+      schedule[d] = {};
+      hours.forEach(h => {
+        schedule[d][h] = [];
+      });
+    });
+
+    // Helper: check if tutor can be added to (day, hr)
+    const canAssign = (tutorId, day, hr) => {
+      if (tutorAssignedCount[tutorId] >= tutorCaps[tutorId]) return false;
+      if (schedule[day][hr].includes(tutorId)) return false;
+      if (schedule[day][hr].length >= maxTutors) return false;
+      return true;
+    };
+
+    const assign = (tutorId, day, hr) => {
+      schedule[day][hr].push(tutorId);
+      tutorAssignedCount[tutorId]++;
+    };
+
+    // Sort tutors depending on objective:
+    // If "min_cost", prefer lower hourly wage first when competencies are equal
+    const getSortedTutors = (scoreFn) => {
+      return [...tutors].sort((a, b) => scoreFn(b) - scoreFn(a));
+    };
+
+    // STEP 1: Guarantee minimum coverage (at least minTutors per slot)
+    for (const day of days) {
+      for (const hr of hours) {
+        while (schedule[day][hr].length < minTutors) {
+          const slotArr = arrivals[day][hr];
+          // Pick tutor with highest remaining capacity & relevant subject match
+          const candidates = getSortedTutors(t => {
+            if (!canAssign(t.id, day, hr)) return -1e9;
+            let compScore = 0;
+            for (const sub of subjects) {
+              if (t.competencies.includes(sub)) {
+                compScore += (slotArr[sub] || 0);
+              }
+            }
+            const remainingRatio = (tutorCaps[t.id] - tutorAssignedCount[t.id]) / Math.max(1, tutorCaps[t.id]);
+            const costPenalty = objective === "min_cost" ? (t.hourlyWage * 0.4) : 0;
+            return compScore * 2 + remainingRatio * 10 - costPenalty;
+          });
+          const best = candidates.find(t => canAssign(t.id, day, hr));
+          if (!best) break;
+          assign(best.id, day, hr);
+        }
+      }
+    }
+
+    // STEP 2: Subject-Specific Bottleneck Coverage
+    // Ensure every subject with significant demand in (day, hr) has enough competent tutors
+    // Specifically handles the 10:00 AM Trigonometry rush and afternoon Calculus/Stats waves!
+    const allSlots = [];
+    for (const day of days) {
+      for (const hr of hours) {
+        allSlots.push({ day, hr, total: arrivals[day][hr]._total });
+      }
+    }
+
+    // Iteratively allocate tutors to the slot with the highest marginal benefit
+    let placed = true;
+    while (placed) {
+      placed = false;
+
+      // In strict "min_cost" mode, stop adding tutors to a slot once capacity >= arrivals * 1.05
+      // and wait time is under targetWaitMinutes. In "balanced" or "ratio_wait" mode, allocate
+      // all contracted staff hours to maximize tutor-to-student ratio!
+      let bestMove = null;
+      let bestGain = -Infinity;
+
+      for (const day of days) {
+        for (const hr of hours) {
+          const currentTutors = schedule[day][hr];
+          if (currentTutors.length >= maxTutors) continue;
+
+          const slotArr = arrivals[day][hr];
+          const totalArr = slotArr._total;
+          const currentCap = currentTutors.length * mu;
+
+          // If min_cost mode and slot already comfortably exceeds arrival rate + subject needs, skip
+          if (objective === "min_cost" && currentCap >= totalArr * 1.15 && currentTutors.length >= Math.ceil(totalArr / mu)) {
+            continue;
+          }
+
+          // Compute subject deficits in this slot
+          const subDeficits = {};
+          for (const sub of subjects) {
+            const subArr = slotArr[sub] || 0;
+            const neededSubTutors = Math.ceil(subArr / mu);
+            const haveSubTutors = currentTutors.filter(tid => tutorMap[tid].competencies.includes(sub)).length;
+            subDeficits[sub] = Math.max(0, subArr - haveSubTutors * mu);
+          }
+
+          // Evaluate each available tutor for this slot
+          for (const tutor of tutors) {
+            if (!canAssign(tutor.id, day, hr)) continue;
+
+            // 1. Direct capacity deficit relief: huge priority when currentCap < totalArr * 1.15
+            const targetCap = totalArr * 1.15;
+            const deficitBonus = currentCap < targetCap
+              ? (targetCap - currentCap) * 35
+              : Math.max(0, (totalArr - currentTutors.length * 2.2)) * 8;
+
+            // 2. Subject competency match benefit (critical for 10am Trig rush & afternoon Calc/Stats)
+            let subjectBenefit = 0;
+            for (const sub of subjects) {
+              if (tutor.competencies.includes(sub) && subDeficits[sub] > 0) {
+                subjectBenefit += subDeficits[sub] * (objective === "subject_match" ? 28 : 18);
+              }
+            }
+
+            // 3. Avoid over-stuffing quiet hours (e.g., 9am/11am/4pm once they already have enough tutors)
+            const overstaffPenalty = currentCap >= totalArr * 1.35 ? 120 : 0;
+
+            // 4. Cost consideration
+            const wageTerm = objective === "min_cost" ? tutor.hourlyWage * 1.5 : tutor.hourlyWage * 0.05;
+
+            // 5. Urgency to place contracted GA hours
+            const contractUrgency = (tutor.role === "GA" ? 6 : 2) *
+              ((tutorCaps[tutor.id] - tutorAssignedCount[tutor.id]) / Math.max(1, tutorCaps[tutor.id]));
+
+            const totalGain = deficitBonus + subjectBenefit + contractUrgency - overstaffPenalty - wageTerm;
+
+            if (totalGain > bestGain) {
+              bestGain = totalGain;
+              bestMove = { tutorId: tutor.id, day, hr };
+            }
+          }
+        }
+      }
+
+      if (bestMove && bestGain > -50) {
+        assign(bestMove.tutorId, bestMove.day, bestMove.hr);
+        placed = true;
+      } else {
+        break;
+      }
+    }
+
+    return schedule;
+  }
+
+  /**
+   * Evaluates any given schedule (Current or Optimized) across the entire week
+   * and returns comprehensive hour-by-hour and aggregate KPIs:
+   *  - Recurrence queue W_t and W_{t+1}
+   *  - Estimated wait time (minutes)
+   *  - Tutor-to-student ratio & students per tutor
+   *  - Subject competency coverage & overlooked students
+   *  - Idle tutor hours & labor cost
+   */
+  evaluateSchedule(schedule, params = this.data.parameters, adjustedArrivals = null) {
+    const arrivals = adjustedArrivals || this.getAdjustedArrivals(params);
+    const mu = this.getServiceRateMu(params);
+    const idealLoad = Number(params.idealStudentsPerTutor) || 3.0;
+    const targetWait = Number(params.targetWaitMinutes) || 8;
+    const days = this.data.meta.operatingDays;
+    const hours = this.data.meta.operatingHours;
+    const subjects = this.data.subjects.map(s => s.id);
+    const tutorMap = {};
+    this.data.tutors.forEach(t => { tutorMap[t.id] = t; });
+
+    const byDay = {};
+    let totalArrivalsWeek = 0;
+    let totalTutorHoursWeek = 0;
+    let totalLaborCostWeek = 0;
+    let totalWeightedWaitMinutes = 0;
+    let totalOverlookedStudents = 0;
+    let totalSubjectUnmatchedStudents = 0;
+    let totalIdleTutorHours = 0;
+    let peakWaitMinutes = 0;
+    let hoursExceedingTargetWait = 0;
+
+    // Track per-tutor assigned hours & wages
+    const tutorSummary = {};
+    this.data.tutors.forEach(t => {
+      tutorSummary[t.id] = {
+        ...t,
+        assignedHours: 0,
+        weeklyPay: 0,
+        byDay: { Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0 }
+      };
+    });
+
+    for (const day of days) {
+      byDay[day] = {};
+      let Wt = 0; // Initial waiting queue at 9:00 AM is 0
+
+      for (const hrObj of hours) {
+        const hr = hrObj.id;
+        const tutorIds = (schedule[day] && schedule[day][hr]) ? schedule[day][hr] : [];
+        const xt = tutorIds.length;
+        const slotArr = arrivals[day][hr];
+        const At = slotArr._total;
+
+        // Calculate hourly wage for this slot & update tutor counts
+        let slotCost = 0;
+        tutorIds.forEach(tid => {
+          const t = tutorMap[tid];
+          if (t) {
+            slotCost += t.hourlyWage;
+            tutorSummary[tid].assignedHours += 1;
+            tutorSummary[tid].weeklyPay += t.hourlyWage;
+            tutorSummary[tid].byDay[day] += 1;
+          }
+        });
+
+        // Service capacity (students served in hour t)
+        const serviceCapacity = xt * mu;
+        const totalDemandInHour = Wt + At;
+        const studentsServed = Math.min(totalDemandInHour, serviceCapacity);
+
+        // Stage 2 Discrete Dynamic Recurrence Relation:
+        // W_{t+1} = max(0, W_t + Arrivals_t - ServiceCapacity_t)
+        const WtNext = Math.max(0, Math.round((Wt + At - serviceCapacity) * 10) / 10);
+
+        // Estimate average wait time in minutes for students in this hour block
+        // Combines M/M/c random arrival queuing delay + deterministic carryover backlog delay
+        const waitMinutes = this.computeSlotWaitMinutes(At, Wt, xt, mu);
+
+        // Compute Subject Competency Coverage & Subject-Overlooked Students
+        const subjectCoverage = {};
+        let slotSubjectUnmatched = 0;
+        for (const sub of subjects) {
+          const subDemand = slotArr[sub] || 0;
+          const capableTutors = tutorIds.filter(tid => tutorMap[tid] && tutorMap[tid].competencies.includes(sub)).length;
+          // Each tutor splits time across subjects, but if 0 or too few capable tutors are present
+          // for a spike (like 12 Trig students at 10am), compute unmatched students:
+          const maxSubCapacity = capableTutors * mu;
+          const unmatched = Math.max(0, subDemand - maxSubCapacity);
+          subjectCoverage[sub] = {
+            demand: subDemand,
+            capableTutors,
+            maxSubCapacity,
+            unmatched: Math.round(unmatched * 10) / 10
+          };
+          slotSubjectUnmatched += unmatched;
+        }
+
+        // Compute "Overlooked Students" (body in seat without adequate tutor eyes on work)
+        // Happens either when total demand exceeds eyes-on capacity OR when subject competency is missing
+        const eyesOnCapacity = xt * idealLoad;
+        const capacityOverlooked = Math.max(0, totalDemandInHour - eyesOnCapacity);
+        const overlookedStudents = Math.round(Math.max(capacityOverlooked, slotSubjectUnmatched) * 10) / 10;
+
+        // Idle tutor hours: tutors beyond what is needed to comfortably serve the active demand
+        const neededTutorsForDemand = Math.max(1, Math.ceil(totalDemandInHour / idealLoad));
+        const idleTutors = Math.max(0, xt - neededTutorsForDemand);
+
+        // Ratios
+        const studentsPerTutor = xt > 0 ? Math.round((totalDemandInHour / xt) * 100) / 100 : totalDemandInHour;
+        const tutorToStudentRatio = totalDemandInHour > 0 ? Math.round((xt / totalDemandInHour) * 1000) / 1000 : 1.0;
+        const engagementRatePct = totalDemandInHour > 0
+          ? Math.min(100, Math.max(0, Math.round(((totalDemandInHour - overlookedStudents) / totalDemandInHour) * 1000) / 10))
+          : 100;
+
+        byDay[day][hr] = {
+          day,
+          hourId: hr,
+          hourLabel: hrObj.label,
+          shortLabel: hrObj.short,
+          tutorIds,
+          xt,
+          arrivals: At,
+          subjectArrivals: { ...slotArr },
+          Wt: Math.round(Wt * 10) / 10,
+          serviceCapacity: Math.round(serviceCapacity * 10) / 10,
+          studentsServed: Math.round(studentsServed * 10) / 10,
+          WtNext,
+          waitMinutes: Math.round(waitMinutes * 10) / 10,
+          studentsPerTutor,
+          tutorToStudentRatio,
+          overlookedStudents,
+          subjectUnmatched: Math.round(slotSubjectUnmatched * 10) / 10,
+          subjectCoverage,
+          idleTutors,
+          engagementRatePct,
+          slotCost
+        };
+
+        // Accumulate weekly totals
+        totalArrivalsWeek += At;
+        totalTutorHoursWeek += xt;
+        totalLaborCostWeek += slotCost;
+        totalWeightedWaitMinutes += waitMinutes * At;
+        totalOverlookedStudents += overlookedStudents;
+        totalSubjectUnmatchedStudents += slotSubjectUnmatched;
+        totalIdleTutorHours += idleTutors;
+        if (waitMinutes > peakWaitMinutes) peakWaitMinutes = waitMinutes;
+        if (waitMinutes > targetWait) hoursExceedingTargetWait++;
+
+        // Advance recurrence state to next hour
+        Wt = WtNext;
+      }
+    }
+
+    // Compute hourly average across the 4 operating days (for Graph 1 & Graph 2)
+    const hourlyAverages = hours.map(hrObj => {
+      const hr = hrObj.id;
+      let sumArr = 0, sumXt = 0, sumCap = 0, sumWt = 0, sumWtNext = 0, sumWait = 0, sumOverlooked = 0;
+      const sumSub = {};
+      subjects.forEach(s => { sumSub[s] = 0; });
+
+      days.forEach(d => {
+        const cell = byDay[d][hr];
+        sumArr += cell.arrivals;
+        sumXt += cell.xt;
+        sumCap += cell.serviceCapacity;
+        sumWt += cell.Wt;
+        sumWtNext += cell.WtNext;
+        sumWait += cell.waitMinutes;
+        sumOverlooked += cell.overlookedStudents;
+        subjects.forEach(s => {
+          sumSub[s] += cell.subjectArrivals[s] || 0;
+        });
+      });
+
+      const n = days.length;
+      const avgSub = {};
+      subjects.forEach(s => { avgSub[s] = Math.round((sumSub[s] / n) * 10) / 10; });
+
+      return {
+        hourId: hr,
+        label: hrObj.label,
+        short: hrObj.short,
+        avgArrivals: Math.round((sumArr / n) * 10) / 10,
+        avgTutors: Math.round((sumXt / n) * 10) / 10,
+        avgCapacity: Math.round((sumCap / n) * 10) / 10,
+        avgWt: Math.round((sumWt / n) * 10) / 10,
+        avgWtNext: Math.round((sumWtNext / n) * 10) / 10,
+        avgWaitMinutes: Math.round((sumWait / n) * 10) / 10,
+        avgOverlooked: Math.round((sumOverlooked / n) * 10) / 10,
+        avgSubjectArrivals: avgSub
+      };
+    });
+
+    const avgWaitWeek = totalArrivalsWeek > 0
+      ? Math.round((totalWeightedWaitMinutes / totalArrivalsWeek) * 10) / 10
+      : 0;
+    const overallEngagementPct = totalArrivalsWeek > 0
+      ? Math.min(100, Math.max(0, Math.round(((totalArrivalsWeek - totalOverlookedStudents) / totalArrivalsWeek) * 1000) / 10))
+      : 100;
+    const avgStudentsPerTutorWeek = totalTutorHoursWeek > 0
+      ? Math.round((totalArrivalsWeek / totalTutorHoursWeek) * 100) / 100
+      : 0;
+
+    return {
+      byDay,
+      hourlyAverages,
+      tutorSummary: Object.values(tutorSummary),
+      kpis: {
+        totalArrivalsWeek: Math.round(totalArrivalsWeek),
+        totalTutorHoursWeek,
+        totalLaborCostWeek: Math.round(totalLaborCostWeek * 100) / 100,
+        avgWaitWeek,
+        peakWaitMinutes: Math.round(peakWaitMinutes * 10) / 10,
+        totalOverlookedStudents: Math.round(totalOverlookedStudents),
+        totalSubjectUnmatchedStudents: Math.round(totalSubjectUnmatchedStudents),
+        totalIdleTutorHours,
+        hoursExceedingTargetWait,
+        overallEngagementPct,
+        avgStudentsPerTutorWeek,
+        serviceRateMu: Math.round(mu * 100) / 100
+      }
+    };
+  }
+
+  /**
+   * Computes realistic wait time in minutes for a 1-hour block using a hybrid
+   * M/M/c Erlang-C queuing formula + deterministic queue carryover delay.
+   */
+  computeSlotWaitMinutes(arrivals, queueStart, tutorsCount, mu) {
+    if (tutorsCount <= 0) return 35.0;
+    const totalCap = tutorsCount * mu;
+    const effectiveDemand = arrivals + queueStart;
+    if (effectiveDemand <= 0.1) return 1.0;
+
+    // Utilization ratio rho
+    const rho = effectiveDemand / totalCap;
+
+    // 1. Deterministic fluid queue delay when demand exceeds capacity
+    const carryoverEnd = Math.max(0, queueStart + arrivals - totalCap);
+    const avgQueueLength = (queueStart + carryoverEnd) / 2;
+    const fluidDelayMinutes = (avgQueueLength / totalCap) * 32;
+
+    // 2. Stochastic M/M/c random arrival clustering delay
+    let stochasticWait = 1.5 + Math.pow(Math.min(1.0, rho), 2.4) * 5.2;
+
+    // 3. Overload bottleneck penalty when rho > 1
+    const overloadPenalty = rho > 1.0 ? (rho - 1.0) * 14 : 0;
+
+    const totalWait = Math.max(1.2, fluidDelayMinutes + stochasticWait + overloadPenalty);
+    return Math.min(35.0, totalWait);
+  }
+
+  /**
+   * Generates Graph 3 Data: Trade-off Frontier (Weekly Tutoring Budget $ vs. Average Wait Time & Engagement)
+   */
+  generateTradeoffFrontier(params = this.data.parameters, adjustedArrivals = null) {
+    const arrivals = adjustedArrivals || this.getAdjustedArrivals(params);
+    const cutLevels = [45, 35, 25, 15, 5, 0, -10, -20, -30];
+    const points = [];
+
+    for (const cut of cutLevels) {
+      const testParams = {
+        ...params,
+        budgetCutPercent: cut,
+        optimizationObjective: "balanced"
+      };
+      const sched = this.solveOptimalSchedule(testParams, arrivals);
+      const evalRes = this.evaluateSchedule(sched, testParams, arrivals);
+      points.push({
+        cutPercent: cut,
+        budget: Math.round(evalRes.kpis.totalLaborCostWeek),
+        tutorHours: evalRes.kpis.totalTutorHoursWeek,
+        avgWait: evalRes.kpis.avgWaitWeek,
+        peakWait: evalRes.kpis.peakWaitMinutes,
+        overlooked: evalRes.kpis.totalOverlookedStudents,
+        engagementPct: evalRes.kpis.overallEngagementPct
+      });
+    }
+
+    // Sort by budget ascending
+    points.sort((a, b) => a.budget - b.budget);
+    return points;
+  }
+}
+
+window.MathLabModelEngine = MathLabModelEngine;
+
+  </script>
+  <script>
+/**
+ * ============================================================================
+ * MATH 319: MATHEMATICAL MODELING — INTERACTIVE APPLICATION CONTROLLER (app.js)
+ * Connects data.js, optimizer.js, Chart.js visualizations, and the Live Data Studio
+ * ============================================================================
+ */
+
+(function () {
+  const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
+
+  // Deep clone utility
+  function clone(obj) {
+    return JSON.parse(JSON.stringify(obj));
+  }
+
+  // Load state from localStorage or fallback to window.MATH_LAB_DEFAULT_DATA
+  function loadInitialState() {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.tutors && parsed.hourlyArrivals) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn("Could not read saved state from localStorage:", e);
+    }
+    return clone(window.MATH_LAB_DEFAULT_DATA);
+  }
+
+  let appData = loadInitialState();
+  let engine = new MathLabModelEngine(appData);
+  let optimizedSchedule = null;
+  let currentEval = null;
+  let optimizedEval = null;
+
+  // Custom prototype tutor counts for Tab 3 interactive recurrence sandbox
+  let customPrototypeXt = {};
+
+  // Chart.js instances
+  let chartInflow = null;
+  let chartWait = null;
+  let chartFrontier = null;
+  let chartOverlooked = null;
+
+  // Save current appData to localStorage
+  function saveState(message) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      if (message) showToast(message);
+    } catch (e) {
+      console.warn("Could not save state:", e);
+    }
+  }
+
+  function showToast(msg) {
+    const el = document.getElementById("toast");
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => el.classList.remove("show"), 2600);
+  }
+
+  // Recompute optimization and evaluations
+  function recomputeModels(reoptimize = true) {
+    engine = new MathLabModelEngine(appData);
+    const adjArrivals = engine.getAdjustedArrivals(appData.parameters);
+    if (reoptimize || !optimizedSchedule) {
+      optimizedSchedule = engine.solveOptimalSchedule(appData.parameters, adjArrivals);
+    }
+    currentEval = engine.evaluateSchedule(appData.currentScheduleTutorsByHour, appData.parameters, adjArrivals);
+    optimizedEval = engine.evaluateSchedule(optimizedSchedule, appData.parameters, adjArrivals);
+  }
+
+  // ==========================================================================
+  // RENDER ALL VIEWS
+  // ==========================================================================
+  function renderAll(reoptimize = true) {
+    recomputeModels(reoptimize);
+    renderHeaderMeta();
+    renderOverviewTab();
+    renderScheduleTab();
+    renderModelsTab();
+    renderEditorTab();
+  }
+
+  function renderHeaderMeta() {
+    document.getElementById("header-project-title").textContent = appData.meta.projectTitle;
+    document.getElementById("header-author").textContent = appData.meta.author;
+    document.getElementById("header-datasource").textContent = "Data: " + appData.meta.dataSourceName;
+  }
+
+  // ==========================================================================
+  // TAB 1: OVERVIEW KPI CARDS & 4 CHARTS
+  // ==========================================================================
+  function renderOverviewTab() {
+    const cur = currentEval.kpis;
+    const opt = optimizedEval.kpis;
+
+    // Update dynamic insight banner
+    const waitReductionPct = cur.avgWaitWeek > 0
+      ? Math.round(((cur.avgWaitWeek - opt.avgWaitWeek) / cur.avgWaitWeek) * 100)
+      : 0;
+    const overlookedSaved = Math.max(0, cur.totalOverlookedStudents - opt.totalOverlookedStudents);
+
+    const bannerEl = document.getElementById("overview-insight-banner");
+    bannerEl.innerHTML = `
+      <strong>Key Modeling Finding:</strong> Using the <em>exact same ${appData.tutors.length} staff members</em> (6 GAs + ${appData.tutors.length - 6} Undergrad Tutors), reallocating idle morning/4pm shifts to the <strong>10:00 AM Trigonometry rush</strong> and <strong>1:00–4:00 PM peak</strong> cuts average student wait time by <strong>${waitReductionPct}%</strong> (${cur.avgWaitWeek}m &rarr; ${opt.avgWaitWeek}m), prevents <strong>${overlookedSaved} students/week</strong> from being overlooked, and raises active tutor-to-student engagement from <strong>${cur.overallEngagementPct}% to ${opt.overallEngagementPct}%</strong>.
+    `;
+
+    // Render 5 KPI Comparison Cards
+    const kpiGrid = document.getElementById("kpi-summary-grid");
+    kpiGrid.innerHTML = `
+      <!-- KPI 1: Engagement / Eyes on Work -->
+      <div class="kpi-card emerald">
+        <div class="kpi-header">
+          <span>"Eyes on Work" Engagement</span>
+          <span>🎯 Goal #1</span>
+        </div>
+        <div class="kpi-comparison">
+          <span class="kpi-main-val">${opt.overallEngagementPct}%</span>
+          <span class="kpi-old-val">was ${cur.overallEngagementPct}%</span>
+        </div>
+        <div class="kpi-delta good">
+          +${(opt.overallEngagementPct - cur.overallEngagementPct).toFixed(1)}% Active Tutor Coverage
+        </div>
+        <div class="kpi-footnote">
+          Students receiving direct, subject-matched tutor attention
+        </div>
+      </div>
+
+      <!-- KPI 2: Average Student Wait Time -->
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span>Avg Student Wait Time</span>
+          <span>⏱️ Target &le; ${appData.parameters.targetWaitMinutes}m</span>
+        </div>
+        <div class="kpi-comparison">
+          <span class="kpi-main-val">${opt.avgWaitWeek} min</span>
+          <span class="kpi-old-val">was ${cur.avgWaitWeek} min</span>
+        </div>
+        <div class="kpi-delta ${opt.avgWaitWeek <= appData.parameters.targetWaitMinutes ? 'good' : 'warn'}">
+          &minus;${(cur.avgWaitWeek - opt.avgWaitWeek).toFixed(1)} min (Peak: ${opt.peakWaitMinutes}m vs ${cur.peakWaitMinutes}m)
+        </div>
+        <div class="kpi-footnote">
+          Flattens the 1–4 PM "highway traffic jam" bottleneck
+        </div>
+      </div>
+
+      <!-- KPI 3: Overlooked Students Prevented -->
+      <div class="kpi-card rose">
+        <div class="kpi-header">
+          <span>Overlooked Students / Wk</span>
+          <span>👀 Capacity + Subject</span>
+        </div>
+        <div class="kpi-comparison">
+          <span class="kpi-main-val">${opt.totalOverlookedStudents}</span>
+          <span class="kpi-old-val">was ${cur.totalOverlookedStudents}</span>
+        </div>
+        <div class="kpi-delta good">
+          ${overlookedSaved} Fewer Students Overlooked
+        </div>
+        <div class="kpi-footnote">
+          Includes 10:00 AM Trig rush &amp; afternoon lecture releases
+        </div>
+      </div>
+
+      <!-- KPI 4: Idle Tutor Hours Reallocated -->
+      <div class="kpi-card amber">
+        <div class="kpi-header">
+          <span>Idle Overstaffed Hours</span>
+          <span>🔄 Shift Reallocation</span>
+        </div>
+        <div class="kpi-comparison">
+          <span class="kpi-main-val">${opt.totalIdleTutorHours} hrs</span>
+          <span class="kpi-old-val">was ${cur.totalIdleTutorHours} hrs</span>
+        </div>
+        <div class="kpi-delta good">
+          ${Math.max(0, cur.totalIdleTutorHours - opt.totalIdleTutorHours)} Idle Hours Moved to Peak
+        </div>
+        <div class="kpi-footnote">
+          Eliminates "mainly tutors &amp; no students" at 9am/11am/4pm
+        </div>
+      </div>
+
+      <!-- KPI 5: Weekly Tutor Hours & Payroll -->
+      <div class="kpi-card purple">
+        <div class="kpi-header">
+          <span>Weekly Lab Staffing &amp; Cost</span>
+          <span>💰 Budget Limit</span>
+        </div>
+        <div class="kpi-comparison">
+          <span class="kpi-main-val">$${opt.totalLaborCostWeek.toLocaleString()}</span>
+          <span class="kpi-old-val">${opt.totalTutorHoursWeek} hrs</span>
+        </div>
+        <div class="kpi-delta good">
+          Service Rate &mu; = ${opt.serviceRateMu}/hr (${appData.parameters.avgSessionMinutes}m/session)
+        </div>
+        <div class="kpi-footnote">
+          Total Mon–Thu Demand: ${opt.totalArrivalsWeek} student check-ins
+        </div>
+      </div>
+    `;
+
+    renderOverviewCharts();
+  }
+
+  function getSelectedDaySeries(evalObj, dayKey) {
+    if (dayKey === "AVG") {
+      return evalObj.hourlyAverages;
+    }
+    const dayMap = evalObj.byDay[dayKey];
+    return appData.meta.operatingHours.map(h => {
+      const cell = dayMap[h.id];
+      return {
+        hourId: h.id,
+        label: h.label,
+        short: h.short,
+        avgArrivals: cell.arrivals,
+        avgTutors: cell.xt,
+        avgCapacity: cell.serviceCapacity,
+        avgWt: cell.Wt,
+        avgWtNext: cell.WtNext,
+        avgWaitMinutes: cell.waitMinutes,
+        avgOverlooked: cell.overlookedStudents,
+        avgSubjectArrivals: cell.subjectArrivals
+      };
+    });
+  }
+
+  function renderOverviewCharts() {
+    const dayKey = document.getElementById("select-overview-day").value || "AVG";
+    const curSeries = getSelectedDaySeries(currentEval, dayKey);
+    const optSeries = getSelectedDaySeries(optimizedEval, dayKey);
+    const labels = curSeries.map(d => d.label);
+
+    const isLight = document.body.classList.contains("light-theme");
+    const textColor = isLight ? "#334155" : "#cbd5e1";
+    const gridColor = isLight ? "rgba(148, 163, 184, 0.25)" : "rgba(51, 65, 85, 0.55)";
+
+    // ------------------------------------------------------------------------
+    // GRAPH 1: Hourly Student Inflow (Stacked by Subject) vs. Tutoring Capacity
+    // ------------------------------------------------------------------------
+    const ctx1 = document.getElementById("chart-inflow-capacity").getContext("2d");
+    if (chartInflow) chartInflow.destroy();
+
+    const subjectDatasets = appData.subjects.map(sub => ({
+      type: "bar",
+      label: sub.short,
+      data: optSeries.map(d => d.avgSubjectArrivals[sub.id] || 0),
+      backgroundColor: sub.color + "cc",
+      borderColor: sub.color,
+      borderWidth: 1,
+      stack: "arrivals",
+      order: 3
+    }));
+
+    chartInflow = new Chart(ctx1, {
+      data: {
+        labels,
+        datasets: [
+          {
+            type: "line",
+            label: "Optimized Service Capacity (μ · x_t)",
+            data: optSeries.map(d => d.avgCapacity),
+            borderColor: "#10b981",
+            backgroundColor: "rgba(16, 185, 129, 0.15)",
+            borderWidth: 3,
+            pointRadius: 4,
+            pointBackgroundColor: "#10b981",
+            tension: 0.25,
+            order: 1
+          },
+          {
+            type: "line",
+            label: "Current Static Capacity (What Happened)",
+            data: curSeries.map(d => d.avgCapacity),
+            borderColor: "#f43f5e",
+            borderDash: [6, 4],
+            borderWidth: 2.5,
+            pointRadius: 3.5,
+            pointBackgroundColor: "#f43f5e",
+            tension: 0.25,
+            order: 2
+          },
+          ...subjectDatasets
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              footer: (items) => {
+                const idx = items[0].dataIndex;
+                return `Total Arrivals: ${optSeries[idx].avgArrivals} students | Opt Tutors: ${optSeries[idx].avgTutors} (was ${curSeries[idx].avgTutors})`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, ticks: { color: textColor }, grid: { color: gridColor } },
+          y: {
+            stacked: true,
+            beginAtZero: true,
+            title: { display: true, text: "Students / Hour (Arrivals vs. Service Capacity)", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+
+    // ------------------------------------------------------------------------
+    // GRAPH 2: Simulated Student Wait Time by Hour
+    // ------------------------------------------------------------------------
+    const ctx2 = document.getElementById("chart-wait-time").getContext("2d");
+    if (chartWait) chartWait.destroy();
+
+    const targetLine = Array(labels.length).fill(Number(appData.parameters.targetWaitMinutes) || 8);
+
+    chartWait = new Chart(ctx2, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Current Schedule Wait Time (Severe Peak Bottleneck)",
+            data: curSeries.map(d => d.avgWaitMinutes),
+            borderColor: "#f43f5e",
+            backgroundColor: "rgba(244, 63, 94, 0.14)",
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 4.5,
+            tension: 0.3
+          },
+          {
+            label: "Optimized Dynamic Staffing Wait Time",
+            data: optSeries.map(d => d.avgWaitMinutes),
+            borderColor: "#10b981",
+            backgroundColor: "rgba(16, 185, 129, 0.16)",
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 4.5,
+            tension: 0.3
+          },
+          {
+            label: `${appData.parameters.targetWaitMinutes}-Minute Target Threshold`,
+            data: targetLine,
+            borderColor: "#f59e0b",
+            borderDash: [5, 5],
+            borderWidth: 2,
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor, font: { size: 11 } } }
+        },
+        scales: {
+          x: { ticks: { color: textColor }, grid: { color: gridColor } },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: "Estimated Student Wait Time (Minutes)", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+
+    // ------------------------------------------------------------------------
+    // GRAPH 3: Trade-off Frontier (Budget vs. Average Wait Time)
+    // ------------------------------------------------------------------------
+    const frontierPoints = engine.generateTradeoffFrontier(appData.parameters);
+    const ctx3 = document.getElementById("chart-tradeoff-frontier").getContext("2d");
+    if (chartFrontier) chartFrontier.destroy();
+
+    chartFrontier = new Chart(ctx3, {
+      type: "line",
+      data: {
+        labels: frontierPoints.map(p => `$${p.budget}`),
+        datasets: [
+          {
+            label: "Lab-Wide Avg Wait Time (min)",
+            data: frontierPoints.map(p => p.avgWait),
+            borderColor: "#3b82f6",
+            backgroundColor: "rgba(59, 130, 246, 0.18)",
+            fill: true,
+            borderWidth: 3,
+            pointRadius: 5,
+            pointBackgroundColor: frontierPoints.map(p =>
+              p.cutPercent === Number(appData.parameters.budgetCutPercent) ? "#f59e0b" : "#3b82f6"
+            ),
+            tension: 0.3,
+            yAxisID: "y"
+          },
+          {
+            label: "Active Engagement Rate (%)",
+            data: frontierPoints.map(p => p.engagementPct),
+            borderColor: "#10b981",
+            borderDash: [4, 4],
+            borderWidth: 2.5,
+            pointRadius: 4,
+            tension: 0.3,
+            yAxisID: "y1"
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              afterBody: (items) => {
+                const p = frontierPoints[items[0].dataIndex];
+                return `Staff Hours: ${p.tutorHours} hrs/wk | Overlooked: ${p.overlooked} students`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: "Weekly Tutoring Payroll Budget ($)", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          },
+          y: {
+            type: "linear",
+            position: "left",
+            beginAtZero: true,
+            title: { display: true, text: "Avg Wait Time (min)", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          },
+          y1: {
+            type: "linear",
+            position: "right",
+            min: 40,
+            max: 100,
+            title: { display: true, text: "Engagement Rate (%)", color: textColor },
+            ticks: { color: textColor },
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+
+    // ------------------------------------------------------------------------
+    // GRAPH 4: Overlooked Students by Hour (Current vs. Optimized)
+    // ------------------------------------------------------------------------
+    const ctx4 = document.getElementById("chart-overlooked").getContext("2d");
+    if (chartOverlooked) chartOverlooked.destroy();
+
+    chartOverlooked = new Chart(ctx4, {
+      type: "bar",
+      data: {
+        labels,
+        datasets: [
+          {
+            label: "Current Schedule: Overlooked Students (Capacity / Subject Gap)",
+            data: curSeries.map(d => d.avgOverlooked),
+            backgroundColor: "rgba(244, 63, 94, 0.78)",
+            borderColor: "#f43f5e",
+            borderWidth: 1,
+            borderRadius: 5
+          },
+          {
+            label: "Optimized Schedule: Overlooked Students",
+            data: optSeries.map(d => d.avgOverlooked),
+            backgroundColor: "rgba(16, 185, 129, 0.82)",
+            borderColor: "#10b981",
+            borderWidth: 1,
+            borderRadius: 5
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { labels: { color: textColor, font: { size: 11 } } }
+        },
+        scales: {
+          x: { ticks: { color: textColor }, grid: { color: gridColor } },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: "Students Overlooked / Unmatched per Hour", color: textColor },
+            ticks: { color: textColor },
+            grid: { color: gridColor }
+          }
+        }
+      }
+    });
+  }
+
+  // ==========================================================================
+  // TAB 2: "WHAT HAPPENED" VS. "WHAT COULD HAVE HAPPENED" SCHEDULE EXPLORER
+  // ==========================================================================
+  function renderScheduleTab() {
+    const selectedDay = document.getElementById("select-schedule-day").value || "Monday";
+    const curDay = currentEval.byDay[selectedDay];
+    const optDay = optimizedEval.byDay[selectedDay];
+    const tutorMap = {};
+    appData.tutors.forEach(t => { tutorMap[t.id] = t; });
+    const subMap = {};
+    appData.subjects.forEach(s => { subMap[s.id] = s; });
+
+    let rowsHtml = "";
+    for (const hrObj of appData.meta.operatingHours) {
+      const hr = hrObj.id;
+      const c = curDay[hr];
+      const o = optDay[hr];
+
+      // Build Subject Demand badges for this hour
+      const subBadges = appData.subjects
+        .filter(s => (o.subjectArrivals[s.id] || 0) > 0)
+        .map(s => `<span class="subject-pill" style="background:${s.color}" title="${s.name}">${s.short}: ${o.subjectArrivals[s.id]}</span>`)
+        .join("");
+
+      // Current Tutors List
+      const curChips = c.tutorIds.map(tid => {
+        const t = tutorMap[tid];
+        if (!t) return "";
+        const shortName = t.name.replace("Grad Assistant ", "GA ");
+        return `<span class="tutor-chip ${t.role === 'GA' ? 'ga' : 'ug'}" title="${t.name} (${t.competencies.join(', ')})">${shortName}</span>`;
+      }).join("");
+
+      // Optimized Interactive Tutors List (click any tutor to toggle in/out of this hour!)
+      const optChips = appData.tutors.map(t => {
+        const isAssigned = o.tutorIds.includes(t.id);
+        const shortName = t.name.replace("Grad Assistant ", "GA ").replace(" (Student Worker)", "");
+        return `<span class="tutor-chip ${t.role === 'GA' ? 'ga' : 'ug'} ${isAssigned ? 'assigned' : ''}"
+                      data-toggle-tutor="${t.id}" data-day="${selectedDay}" data-hr="${hr}"
+                      title="Click to ${isAssigned ? 'remove' : 'assign'} ${t.name} | Subjects: ${t.competencies.map(k => subMap[k]?.short).join(', ')}">
+                  ${isAssigned ? '✓ ' : '+ '}${shortName}
+                </span>`;
+      }).join("");
+
+      // Status classes
+      const curStatusClass = c.overlookedStudents > 3
+        ? "status-critical"
+        : (c.idleTutors >= 2 ? "status-idle" : "status-warning");
+      const curStatusLabel = c.overlookedStudents > 3
+        ? `⚠️ ${c.overlookedStudents} Overlooked (${c.waitMinutes}m wait)`
+        : (c.idleTutors >= 2 ? `💤 ${c.idleTutors} Idle Tutors` : `Wait: ${c.waitMinutes}m`);
+
+      const optStatusClass = o.overlookedStudents <= 1 && o.waitMinutes <= appData.parameters.targetWaitMinutes
+        ? "status-optimal"
+        : (o.overlookedStudents <= 3 ? "status-warning" : "status-critical");
+      const optStatusLabel = o.overlookedStudents <= 1
+        ? `✅ Optimal (${o.waitMinutes}m wait)`
+        : `⚡ ${o.overlookedStudents} Overlooked (${o.waitMinutes}m wait)`;
+
+      rowsHtml += `
+        <tr>
+          <td>
+            <div style="font-weight:700;color:var(--text-primary);">${hrObj.label}</div>
+            <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:0.15rem;">
+              <strong>${o.arrivals}</strong> arrivals ${hr === '10:00' ? '🔥 <em>(Trig Release)</em>' : ''}
+            </div>
+            <div style="margin-top:0.3rem;">${subBadges}</div>
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
+              <span><strong>${c.xt} Tutors</strong> (1 : ${c.studentsPerTutor} stu)</span>
+              <span class="status-cell ${curStatusClass}">${curStatusLabel}</span>
+            </div>
+            <div class="tutor-chip-list">${curChips}</div>
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
+              <span><strong>${o.xt} Tutors</strong> (1 : ${o.studentsPerTutor} stu)</span>
+              <span class="status-cell ${optStatusClass}">${optStatusLabel}</span>
+            </div>
+            <div class="tutor-chip-list">${optChips}</div>
+          </td>
+        </tr>
+      `;
+    }
+
+    document.getElementById("schedule-comparison-table-wrap").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:20%;">Hour Block &amp; Subject Demand</th>
+            <th style="width:36%;">What Happened This Semester (Current Static)</th>
+            <th style="width:44%;">What Could Have Happened (ILP Optimized — Click Chips to Edit)</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    `;
+
+    // Bind click events to toggle tutor chips in the optimized schedule
+    document.querySelectorAll("[data-toggle-tutor]").forEach(chip => {
+      chip.addEventListener("click", () => {
+        const tid = chip.getAttribute("data-toggle-tutor");
+        const day = chip.getAttribute("data-day");
+        const hr = chip.getAttribute("data-hr");
+        const list = optimizedSchedule[day][hr];
+        const idx = list.indexOf(tid);
+        if (idx >= 0) {
+          if (list.length <= 1) {
+            showToast("Minimum coverage bound requires at least 1 tutor on duty!");
+            return;
+          }
+          list.splice(idx, 1);
+        } else {
+          list.push(tid);
+        }
+        renderAll(false);
+        showToast(`Updated ${day} ${hr} shift assignment`);
+      });
+    });
+
+    // Render Roster Utilization Summary Table
+    let rosterRows = "";
+    const curTutorMap = {};
+    currentEval.tutorSummary.forEach(t => { curTutorMap[t.id] = t; });
+
+    optimizedEval.tutorSummary.forEach(t => {
+      const curT = curTutorMap[t.id] || { assignedHours: 0 };
+      const subPills = t.competencies.map(cid => {
+        const s = subMap[cid];
+        return s ? `<span class="subject-pill" style="background:${s.color}">${s.short}</span>` : "";
+      }).join("");
+
+      const targetHrs = Math.round(
+        (t.role === "GA" ? t.monThuLabHours * appData.parameters.gaLabAllocationRatio : t.monThuLabHours) *
+        (1 - (appData.parameters.budgetCutPercent || 0) / 100)
+      );
+
+      rosterRows += `
+        <tr>
+          <td><strong>${t.name}</strong></td>
+          <td><span class="badge ${t.role === 'GA' ? 'badge-blue' : 'badge-emerald'}">${t.tierLabel}</span></td>
+          <td>${subPills}</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${t.contractHours} hrs/wk (${targetHrs}h Mon–Thu cap)</td>
+          <td style="font-family:'JetBrains Mono',monospace;">${curT.assignedHours} hrs</td>
+          <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-emerald);">
+            ${t.assignedHours} hrs (M:${t.byDay.Monday} T:${t.byDay.Tuesday} W:${t.byDay.Wednesday} R:${t.byDay.Thursday})
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;">$${t.weeklyPay.toFixed(2)}</td>
+        </tr>
+      `;
+    });
+
+    document.getElementById("roster-utilization-table-wrap").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tutor Name</th>
+            <th>Staffing Tier</th>
+            <th>Subject Competencies</th>
+            <th>Contract Limit</th>
+            <th>Current Hrs</th>
+            <th>Optimized Hrs (Mon–Thu Breakdown)</th>
+            <th>Weekly Pay</th>
+          </tr>
+        </thead>
+        <tbody>${rosterRows}</tbody>
+      </table>
+    `;
+  }
+
+  // ==========================================================================
+  // TAB 3: 4-HOUR PROTOTYPE & MATHEMATICAL MODELS
+  // ==========================================================================
+  function renderModelsTab() {
+    const day = document.getElementById("proto-day-select").value || "Monday";
+    const winType = document.getElementById("proto-window-select").value || "afternoon";
+    const mu = engine.getServiceRateMu(appData.parameters);
+
+    document.getElementById("proto-mu-label").textContent = appData.parameters.avgSessionMinutes;
+    document.getElementById("proto-rate-label").textContent = mu.toFixed(2);
+
+    const windowHours = winType === "afternoon"
+      ? ["12:00", "13:00", "14:00", "15:00"]
+      : ["09:00", "10:00", "11:00", "12:00"];
+
+    const adjArrivals = engine.getAdjustedArrivals(appData.parameters);
+    let WtCur = 0;
+    let WtOpt = 0;
+    let WtCustom = 0;
+
+    let protoRows = "";
+    windowHours.forEach(hr => {
+      const hrObj = appData.meta.operatingHours.find(h => h.id === hr);
+      const At = adjArrivals[day][hr]._total;
+      const xtCur = appData.currentScheduleTutorsByHour[day][hr].length;
+      const xtOpt = optimizedSchedule[day][hr].length;
+      const customKey = `${day}_${hr}`;
+      const xtCust = customPrototypeXt[customKey] !== undefined ? customPrototypeXt[customKey] : xtOpt;
+
+      const capCur = Math.round(xtCur * mu * 10) / 10;
+      const capOpt = Math.round(xtOpt * mu * 10) / 10;
+      const capCust = Math.round(xtCust * mu * 10) / 10;
+
+      const nextCur = Math.max(0, Math.round((WtCur + At - capCur) * 10) / 10);
+      const nextOpt = Math.max(0, Math.round((WtOpt + At - capOpt) * 10) / 10);
+      const nextCust = Math.max(0, Math.round((WtCustom + At - capCust) * 10) / 10);
+
+      protoRows += `
+        <tr>
+          <td><strong>${hrObj.label}</strong></td>
+          <td style="font-family:'JetBrains Mono',monospace;font-weight:700;">${At} students</td>
+          <td style="font-family:'JetBrains Mono',monospace;">
+            x<sub>t</sub> = ${xtCur} &rarr; Cap = ${capCur}<br/>
+            <span style="color:var(--accent-rose);">W<sub>t</sub>=${WtCur} &rarr; <strong>W<sub>t+1</sub> = ${nextCur}</strong></span>
+          </td>
+          <td style="font-family:'JetBrains Mono',monospace;">
+            x<sub>t</sub> = ${xtOpt} &rarr; Cap = ${capOpt}<br/>
+            <span style="color:var(--accent-emerald);">W<sub>t</sub>=${WtOpt} &rarr; <strong>W<sub>t+1</sub> = ${nextOpt}</strong></span>
+          </td>
+          <td>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <input type="number" class="num-input proto-xt-input" data-key="${customKey}" min="1" max="12" value="${xtCust}" />
+              <span style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;">
+                Cap=${capCust} | W<sub>t</sub>=${WtCustom} &rarr; <strong style="color:var(--accent-primary);">W<sub>t+1</sub>=${nextCust}</strong>
+              </span>
+            </div>
+          </td>
+        </tr>
+      `;
+
+      WtCur = nextCur;
+      WtOpt = nextOpt;
+      WtCustom = nextCust;
+    });
+
+    document.getElementById("prototype-table-wrap").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Hour Block (<em>t</em>)</th>
+            <th>Arrivals (&lambda;<sub>t</sub>)</th>
+            <th>Current Staffing Recurrence (W<sub>t+1</sub>)</th>
+            <th>Optimized Staffing Recurrence (W<sub>t+1</sub>)</th>
+            <th>Live Sandbox: Test Custom Tutors (x<sub>t</sub>)</th>
+          </tr>
+        </thead>
+        <tbody>${protoRows}</tbody>
+      </table>
+    `;
+
+    document.querySelectorAll(".proto-xt-input").forEach(inp => {
+      inp.addEventListener("input", (e) => {
+        const key = e.target.getAttribute("data-key");
+        customPrototypeXt[key] = Math.max(1, parseInt(e.target.value, 10) || 1);
+        renderModelsTab();
+      });
+    });
+
+    // Render Class Schedule Release Drivers table
+    const subMap = {};
+    appData.subjects.forEach(s => { subMap[s.id] = s; });
+
+    const classRows = appData.classSchedule.map(c => {
+      const s = subMap[c.subject];
+      const estWalkins = Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
+      return `
+        <tr>
+          <td><strong>${c.code}</strong><br/><span style="font-size:0.74rem;color:var(--text-secondary);">${c.title}</span></td>
+          <td><span class="subject-pill" style="background:${s ? s.color : '#3b82f6'}">${s ? s.short : c.subject}</span></td>
+          <td style="font-size:0.78rem;">${c.classTime}<br/><strong style="color:var(--accent-amber);">Lets out &rarr; ${c.releaseHour}</strong></td>
+          <td style="font-family:'JetBrains Mono',monospace;">${c.enrolled} enrolled<br/><span style="color:var(--accent-emerald);">~${estWalkins} walk-ins/hr</span></td>
+          <td style="font-size:0.77rem;color:var(--text-secondary);">${c.impactNote}</td>
+        </tr>
+      `;
+    }).join("");
+
+    document.getElementById("class-schedule-summary-wrap").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Course Section</th>
+            <th>Subject</th>
+            <th>Lecture &amp; Release Time</th>
+            <th>Enrolled / Walk-Ins</th>
+            <th>Lab Impact</th>
+          </tr>
+        </thead>
+        <tbody>${classRows}</tbody>
+      </table>
+    `;
+  }
+
+  // ==========================================================================
+  // TAB 4: LIVE DATA, ROSTER & ARRIVALS STUDIO
+  // ==========================================================================
+  function renderEditorTab() {
+    // 1. Render Editable Tutor Roster Table
+    let tutorRows = "";
+    appData.tutors.forEach((t, idx) => {
+      const compChecks = appData.subjects.map(sub => {
+        const checked = t.competencies.includes(sub.id) ? "checked" : "";
+        return `
+          <label style="display:inline-flex;align-items:center;gap:0.25rem;margin-right:0.65rem;font-size:0.76rem;cursor:pointer;">
+            <input type="checkbox" class="edit-tutor-comp" data-idx="${idx}" data-sub="${sub.id}" ${checked} />
+            <span style="color:${sub.color};font-weight:700;">${sub.short}</span>
+          </label>
+        `;
+      }).join("");
+
+      tutorRows += `
+        <tr>
+          <td>
+            <input type="text" class="text-input edit-tutor-name" data-idx="${idx}" value="${t.name}" style="width:185px;" />
+          </td>
+          <td>
+            <select class="text-input edit-tutor-role" data-idx="${idx}">
+              <option value="GA" ${t.role === 'GA' ? 'selected' : ''}>Grad Assistant (20h)</option>
+              <option value="UG_10" ${t.role === 'UG_10' ? 'selected' : ''}>Undergrad Tutor (10h)</option>
+              <option value="UG_8" ${t.role === 'UG_8' ? 'selected' : ''}>Student Worker (8h)</option>
+            </select>
+          </td>
+          <td>
+            <input type="number" class="num-input edit-tutor-contract" data-idx="${idx}" min="1" max="40" value="${t.contractHours}" />
+          </td>
+          <td>
+            <input type="number" class="num-input edit-tutor-labhrs" data-idx="${idx}" min="1" max="32" value="${t.monThuLabHours}" />
+          </td>
+          <td>
+            <input type="number" class="num-input edit-tutor-wage" data-idx="${idx}" min="8" max="45" step="0.5" value="${t.hourlyWage}" />
+          </td>
+          <td>${compChecks}</td>
+          <td>
+            <button class="btn btn-amber btn-delete-tutor" data-idx="${idx}" style="padding:0.28rem 0.55rem;font-size:0.74rem;">✕</button>
+          </td>
+        </tr>
+      `;
+    });
+
+    document.getElementById("editor-tutor-table-wrap").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Tutor Name</th>
+            <th>Staffing Tier</th>
+            <th>Contract Hrs/Wk</th>
+            <th>Mon–Thu Lab Hrs</th>
+            <th>Hourly Wage ($)</th>
+            <th>Subject Competencies (Check All Comfortable Topics)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${tutorRows}</tbody>
+      </table>
+    `;
+
+    // Attach tutor editor listeners
+    document.querySelectorAll(".edit-tutor-name").forEach(el => {
+      el.addEventListener("change", e => {
+        const i = Number(e.target.getAttribute("data-idx"));
+        appData.tutors[i].name = e.target.value.trim() || "Tutor";
+        saveState("Updated tutor name");
+        renderAll(true);
+      });
+    });
+
+    document.querySelectorAll(".edit-tutor-role").forEach(el => {
+      el.addEventListener("change", e => {
+        const i = Number(e.target.getAttribute("data-idx"));
+        const val = e.target.value;
+        appData.tutors[i].role = val;
+        appData.tutors[i].tierLabel = val === "GA" ? "Graduate Assistant" : (val === "UG_10" ? "Undergrad Tutor (10h)" : "Student Worker (8h)");
+        saveState("Updated tutor tier");
+        renderAll(true);
+      });
+    });
+
+    document.querySelectorAll(".edit-tutor-contract").forEach(el => {
+      el.addEventListener("change", e => {
+        const i = Number(e.target.getAttribute("data-idx"));
+        appData.tutors[i].contractHours = Math.max(1, Number(e.target.value) || 8);
+        saveState("Updated contract hours");
+        renderAll(true);
+      });
+    });
+
+    document.querySelectorAll(".edit-tutor-labhrs").forEach(el => {
+      el.addEventListener("change", e => {
+        const i = Number(e.target.getAttribute("data-idx"));
+        appData.tutors[i].monThuLabHours = Math.max(1, Math.min(32, Number(e.target.value) || 8));
+        saveState("Updated Mon-Thu lab hours");
+        renderAll(true);
+      });
+    });
+
+    document.querySelectorAll(".edit-tutor-wage").forEach(el => {
+      el.addEventListener("change", e => {
+        const i = Number(e.target.getAttribute("data-idx"));
+        appData.tutors[i].hourlyWage = Math.max(5, Number(e.target.value) || 12.5);
+        saveState("Updated tutor wage");
+        renderAll(true);
+      });
+    });
+
+    document.querySelectorAll(".edit-tutor-comp").forEach(el => {
+      el.addEventListener("change", e => {
+        const i = Number(e.target.getAttribute("data-idx"));
+        const sub = e.target.getAttribute("data-sub");
+        const list = appData.tutors[i].competencies;
+        if (e.target.checked && !list.includes(sub)) {
+          list.push(sub);
+        } else if (!e.target.checked && list.includes(sub)) {
+          if (list.length <= 1) {
+            e.target.checked = true;
+            showToast("Each tutor must have at least 1 subject competency");
+            return;
+          }
+          appData.tutors[i].competencies = list.filter(x => x !== sub);
+        }
+        saveState("Updated tutor subject competencies");
+        renderAll(true);
+      });
+    });
+
+    document.querySelectorAll(".btn-delete-tutor").forEach(el => {
+      el.addEventListener("click", e => {
+        if (appData.tutors.length <= 2) {
+          showToast("Cannot remove all tutors!");
+          return;
+        }
+        const i = Number(e.currentTarget.getAttribute("data-idx"));
+        const removed = appData.tutors.splice(i, 1)[0];
+        // Also remove from currentScheduleTutorsByHour if present
+        appData.meta.operatingDays.forEach(d => {
+          appData.meta.operatingHours.forEach(h => {
+            appData.currentScheduleTutorsByHour[d][h.id] =
+              (appData.currentScheduleTutorsByHour[d][h.id] || []).filter(id => id !== removed.id);
+          });
+        });
+        saveState(`Removed ${removed.name}`);
+        renderAll(true);
+      });
+    });
+
+    // 2. Render Editable Hourly Arrivals Table
+    const editDay = document.getElementById("editor-arrival-day").value || "Monday";
+    const dayArrivals = appData.hourlyArrivals[editDay];
+
+    let arrHeaderCols = appData.subjects.map(s => `<th style="color:${s.color}">${s.name} (${s.short})</th>`).join("");
+    let arrRows = "";
+
+    appData.meta.operatingHours.forEach(hrObj => {
+      const hr = hrObj.id;
+      const rowData = dayArrivals[hr] || {};
+      let total = 0;
+      const inputsHtml = appData.subjects.map(s => {
+        const val = Number(rowData[s.id]) || 0;
+        total += val;
+        return `
+          <td>
+            <input type="number" class="num-input edit-arrival-cell"
+                   data-day="${editDay}" data-hr="${hr}" data-sub="${s.id}"
+                   min="0" max="100" step="1" value="${val}" />
+          </td>
+        `;
+      }).join("");
+
+      arrRows += `
+        <tr>
+          <td><strong>${hrObj.label}</strong></td>
+          ${inputsHtml}
+          <td style="font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--accent-primary);">
+            ${total} students/hr
+          </td>
+        </tr>
+      `;
+    });
+
+    document.getElementById("editor-arrivals-table-wrap").innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Hour Block (${editDay})</th>
+            ${arrHeaderCols}
+            <th>Hourly Total (&lambda;<sub>t</sub>)</th>
+          </tr>
+        </thead>
+        <tbody>${arrRows}</tbody>
+      </table>
+    `;
+
+    document.querySelectorAll(".edit-arrival-cell").forEach(el => {
+      el.addEventListener("change", e => {
+        const d = e.target.getAttribute("data-day");
+        const h = e.target.getAttribute("data-hr");
+        const s = e.target.getAttribute("data-sub");
+        appData.hourlyArrivals[d][h][s] = Math.max(0, Number(e.target.value) || 0);
+        saveState(`Updated ${d} ${h} arrivals`);
+        renderAll(true);
+      });
+    });
+  }
+
+  // ==========================================================================
+  // FILE EXPORT & EXCEL/CSV/JSON IMPORT HANDLERS
+  // ==========================================================================
+  function downloadUpdatedDataJs() {
+    const content = `/**
+ * ============================================================================
+ * MATH 319: MATHEMATICAL MODELING — DATA & CONFIGURATION FILE (data.js)
+ * Exported from Dashboard on ${new Date().toLocaleString()}
+ * ============================================================================
+ */
+
+window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
+`;
+    const blob = new Blob([content], { type: "application/javascript;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "data.js";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Downloaded updated data.js!");
+  }
+
+  function exportExcelWorkbook() {
+    if (typeof XLSX === "undefined") {
+      showToast("SheetJS library not loaded");
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Optimized Schedule & KPIs by Day/Hour
+    const schedRows = [];
+    appData.meta.operatingDays.forEach(d => {
+      appData.meta.operatingHours.forEach(h => {
+        const c = currentEval.byDay[d][h.id];
+        const o = optimizedEval.byDay[d][h.id];
+        schedRows.push({
+          Day: d,
+          Hour: h.label,
+          Arrivals_Total: o.arrivals,
+          Algebra: o.subjectArrivals.alg,
+          Trigonometry: o.subjectArrivals.trig,
+          Precalculus: o.subjectArrivals.pre,
+          Calculus: o.subjectArrivals.calc,
+          Statistics: o.subjectArrivals.stats,
+          Current_Tutors: c.xt,
+          Current_Wait_Min: c.waitMinutes,
+          Current_Overlooked: c.overlookedStudents,
+          Optimized_Tutors: o.xt,
+          Optimized_Wait_Min: o.waitMinutes,
+          Optimized_Overlooked: o.overlookedStudents,
+          Assigned_Roster: o.tutorIds.join(", ")
+        });
+      });
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(schedRows), "Schedule_Comparison");
+
+    // Sheet 2: Tutor Roster Summary
+    const rosterRows = optimizedEval.tutorSummary.map(t => ({
+      Tutor_ID: t.id,
+      Name: t.name,
+      Tier: t.tierLabel,
+      Contract_Hours: t.contractHours,
+      MonThu_Lab_Hours: t.monThuLabHours,
+      Assigned_Hours: t.assignedHours,
+      Hourly_Wage: t.hourlyWage,
+      Weekly_Pay: t.weeklyPay,
+      Competencies: t.competencies.join(", ")
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rosterRows), "Tutor_Roster");
+
+    XLSX.writeFile(wb, "Math319_Math_Lab_Optimization_Report.xlsx");
+    showToast("Exported Excel report (.xlsx)!");
+  }
+
+  function handleFileUpload(file) {
+    if (!file) return;
+    const ext = file.name.split(".").pop().toLowerCase();
+
+    if (ext === "json") {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.tutors && parsed.hourlyArrivals) {
+            appData = parsed;
+            appData.meta.dataSourceName = file.name;
+            saveState(`Imported ${file.name}`);
+            renderAll(true);
+          } else {
+            showToast("JSON file missing required fields");
+          }
+        } catch (err) {
+          showToast("Invalid JSON file");
+        }
+      };
+      reader.readAsText(file);
+      return;
+    }
+
+    // Handle .xlsx, .xls, or .csv via SheetJS
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet);
+
+        if (rows && rows.length > 0) {
+          let updatedCount = 0;
+          rows.forEach(r => {
+            const day = r.Day || r.day || r.DAY;
+            const hrRaw = String(r.Hour || r.hour || r.Time || "").trim();
+            if (day && appData.hourlyArrivals[day]) {
+              const matchedHr = appData.meta.operatingHours.find(
+                h => h.id === hrRaw || h.label.toLowerCase() === hrRaw.toLowerCase() || h.short.toLowerCase() === hrRaw.toLowerCase()
+              );
+              if (matchedHr) {
+                const target = appData.hourlyArrivals[day][matchedHr.id];
+                if (r.Algebra !== undefined) target.alg = Number(r.Algebra) || 0;
+                if (r.Trigonometry !== undefined) target.trig = Number(r.Trigonometry) || 0;
+                if (r.Precalculus !== undefined) target.pre = Number(r.Precalculus) || 0;
+                if (r.Calculus !== undefined) target.calc = Number(r.Calculus) || 0;
+                if (r.Statistics !== undefined) target.stats = Number(r.Statistics) || 0;
+                updatedCount++;
+              }
+            }
+          });
+          appData.meta.dataSourceName = file.name;
+          saveState(`Loaded ${file.name} (${updatedCount > 0 ? updatedCount + ' hourly slots updated' : rows.length + ' records analyzed'})`);
+          renderAll(true);
+        }
+      } catch (err) {
+        console.error(err);
+        showToast("Could not parse spreadsheet file");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  // ==========================================================================
+  // INITIALIZE EVENT LISTENERS
+  // ==========================================================================
+  function initEventListeners() {
+    // Tab switching
+    document.querySelectorAll(".nav-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".nav-tab").forEach(b => b.classList.remove("active"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+        btn.classList.add("active");
+        const tabId = btn.getAttribute("data-tab");
+        document.getElementById(tabId).classList.add("active");
+        if (tabId === "tab-overview") {
+          renderOverviewCharts();
+        }
+      });
+    });
+
+    // Dark / Light mode toggle
+    document.getElementById("btn-theme-toggle").addEventListener("click", (e) => {
+      document.body.classList.toggle("light-theme");
+      const isLight = document.body.classList.contains("light-theme");
+      e.currentTarget.textContent = isLight ? "🌙 Dark Mode" : "☀️ Light Mode";
+      renderOverviewCharts();
+    });
+
+    // Global sensitivity sliders
+    const sliderSurge = document.getElementById("slider-surge");
+    const sliderSession = document.getElementById("slider-session");
+    const sliderBudgetCut = document.getElementById("slider-budget-cut");
+    const sliderSmoothing = document.getElementById("slider-smoothing");
+    const selectObjective = document.getElementById("select-objective");
+
+    function syncSlidersToUI() {
+      const p = appData.parameters;
+      sliderSurge.value = p.trafficSurgePercent;
+      document.getElementById("val-surge").textContent = (p.trafficSurgePercent >= 0 ? "+" : "") + p.trafficSurgePercent + "%";
+
+      sliderSession.value = p.avgSessionMinutes;
+      document.getElementById("val-session").textContent = p.avgSessionMinutes + " min";
+
+      sliderBudgetCut.value = p.budgetCutPercent;
+      document.getElementById("val-budget-cut").textContent = (p.budgetCutPercent > 0 ? "-" : (p.budgetCutPercent < 0 ? "+" : "")) + Math.abs(p.budgetCutPercent) + "%";
+
+      sliderSmoothing.value = p.demandSmoothingPercent;
+      document.getElementById("val-smoothing").textContent = p.demandSmoothingPercent + "%";
+
+      selectObjective.value = p.optimizationObjective;
+    }
+
+    sliderSurge.addEventListener("input", e => {
+      appData.parameters.trafficSurgePercent = Number(e.target.value);
+      syncSlidersToUI();
+      renderAll(true);
+    });
+
+    sliderSession.addEventListener("input", e => {
+      appData.parameters.avgSessionMinutes = Number(e.target.value);
+      syncSlidersToUI();
+      renderAll(true);
+    });
+
+    sliderBudgetCut.addEventListener("input", e => {
+      appData.parameters.budgetCutPercent = Number(e.target.value);
+      syncSlidersToUI();
+      renderAll(true);
+    });
+
+    sliderSmoothing.addEventListener("input", e => {
+      appData.parameters.demandSmoothingPercent = Number(e.target.value);
+      syncSlidersToUI();
+      renderAll(true);
+    });
+
+    selectObjective.addEventListener("change", e => {
+      appData.parameters.optimizationObjective = e.target.value;
+      renderAll(true);
+    });
+
+    // Scenario Presets
+    document.querySelectorAll(".preset-pill").forEach(pill => {
+      pill.addEventListener("click", () => {
+        document.querySelectorAll(".preset-pill").forEach(p => p.classList.remove("active"));
+        pill.classList.add("active");
+        const preset = pill.getAttribute("data-preset");
+        if (preset === "baseline") {
+          appData.parameters.trafficSurgePercent = 0;
+          appData.parameters.avgSessionMinutes = 20;
+          appData.parameters.budgetCutPercent = 0;
+          appData.parameters.demandSmoothingPercent = 0;
+        } else if (preset === "midterm") {
+          appData.parameters.trafficSurgePercent = 30;
+          appData.parameters.avgSessionMinutes = 20;
+          appData.parameters.budgetCutPercent = 0;
+          appData.parameters.demandSmoothingPercent = 0;
+        } else if (preset === "long_sessions") {
+          appData.parameters.trafficSurgePercent = 0;
+          appData.parameters.avgSessionMinutes = 30;
+          appData.parameters.budgetCutPercent = 0;
+          appData.parameters.demandSmoothingPercent = 0;
+        } else if (preset === "budget_cut") {
+          appData.parameters.trafficSurgePercent = 0;
+          appData.parameters.avgSessionMinutes = 20;
+          appData.parameters.budgetCutPercent = 15;
+          appData.parameters.demandSmoothingPercent = 0;
+        } else if (preset === "demand_nudge") {
+          appData.parameters.trafficSurgePercent = 0;
+          appData.parameters.avgSessionMinutes = 20;
+          appData.parameters.budgetCutPercent = 0;
+          appData.parameters.demandSmoothingPercent = 15;
+        }
+        syncSlidersToUI();
+        renderAll(true);
+        showToast(`Applied scenario preset: ${pill.textContent}`);
+      });
+    });
+
+    // Day selectors across tabs
+    document.getElementById("select-overview-day").addEventListener("change", () => renderOverviewCharts());
+    document.getElementById("select-schedule-day").addEventListener("change", () => renderScheduleTab());
+    document.getElementById("btn-reoptimize-schedule").addEventListener("click", () => {
+      renderAll(true);
+      showToast("Re-computed optimal ILP schedule!");
+    });
+
+    document.getElementById("proto-day-select").addEventListener("change", () => renderModelsTab());
+    document.getElementById("proto-window-select").addEventListener("change", () => renderModelsTab());
+    document.getElementById("editor-arrival-day").addEventListener("change", () => renderEditorTab());
+
+    // Add New Tutor button
+    document.getElementById("btn-add-tutor").addEventListener("click", () => {
+      const newId = "ug-custom-" + (appData.tutors.length + 1);
+      appData.tutors.push({
+        id: newId,
+        name: "New Tutor " + (appData.tutors.length + 1),
+        role: "UG_8",
+        tierLabel: "Student Worker (8h)",
+        contractHours: 8,
+        monThuLabHours: 8,
+        hourlyWage: 12.50,
+        competencies: ["alg", "trig"],
+        notes: "Added via Dashboard Studio"
+      });
+      saveState("Added new tutor to roster");
+      renderAll(true);
+    });
+
+    // Export / Import / Reset buttons
+    document.getElementById("btn-export-datajs").addEventListener("click", downloadUpdatedDataJs);
+    document.getElementById("btn-download-datajs-2").addEventListener("click", downloadUpdatedDataJs);
+    document.getElementById("btn-export-excel").addEventListener("click", exportExcelWorkbook);
+
+    document.getElementById("file-upload-input").addEventListener("change", e => {
+      if (e.target.files && e.target.files[0]) {
+        handleFileUpload(e.target.files[0]);
+      }
+    });
+
+    document.getElementById("btn-reset-defaults").addEventListener("click", () => {
+      localStorage.removeItem(STORAGE_KEY);
+      appData = clone(window.MATH_LAB_DEFAULT_DATA);
+      customPrototypeXt = {};
+      syncSlidersToUI();
+      renderAll(true);
+      showToast("Reset all data & schedules to baseline!");
+    });
+
+    syncSlidersToUI();
+  }
+
+  // Boot application on DOMContentLoaded
+  document.addEventListener("DOMContentLoaded", () => {
+    initEventListeners();
+    renderAll(true);
+  });
+})();
+
+
+  </script>
+</body>
+</html>
+

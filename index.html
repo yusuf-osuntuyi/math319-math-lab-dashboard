@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Lab Staffing & Student Flow — MATH 319 Dashboard</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Chart.js for Interactive Visualizations -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (xlsx) for Direct Excel File Import/Export -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- TOP HEADER & NAVIGATION -->
+  <header class="top-header">
+    <div class="header-inner">
+      <div class="brand-group">
+        <div class="brand-badge">MATH 319</div>
+        <div class="brand-title">
+          <h1 id="header-project-title">Math Lab Staffing &amp; Student Flow</h1>
+          <div class="brand-subtitle">
+            <span>Author: <strong id="header-author">Yusuf Osuntuyi</strong></span>
+            <span class="dot-sep">•</span>
+            <span>Mathematical Modeling (Fall 2026)</span>
+            <span class="dot-sep">•</span>
+            <span id="header-datasource">Data: Copy of Math Lab Participation Tracker 2026-2027.xlsx</span>
+          </div>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" role="tablist">
+        <button class="nav-tab active" data-tab="tab-overview">
+          <span>📊</span> Overview &amp; Proposal Graphs
+        </button>
+        <button class="nav-tab" data-tab="tab-schedule">
+          <span>🗓️</span> What Happened vs. Optimized
+        </button>
+        <button class="nav-tab" data-tab="tab-models">
+          <span>🧮</span> 4-Hr Prototype &amp; ILP Math
+        </button>
+        <button class="nav-tab" data-tab="tab-editor">
+          <span>✏️</span> Edit Data, Roster &amp; Excel Import
+        </button>
+      </nav>
+
+      <div class="header-actions">
+        <button class="btn" id="btn-theme-toggle" title="Switch Dark / Light Theme">
+          ☀️ Light Mode
+        </button>
+        <button class="btn btn-emerald" id="btn-export-datajs" title="Download updated data.js file">
+          💾 Save data.js
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- GLOBAL SENSITIVITY & SCENARIO RIBBON -->
+  <section class="scenario-ribbon">
+    <div class="scenario-inner">
+      <div class="scenario-controls">
+        <div class="control-item">
+          <div class="control-label">
+            <span>Traffic Surge (&lambda;<sub>t</sub>)</span>
+            <span class="control-val" id="val-surge">0%</span>
+          </div>
+          <input type="range" id="slider-surge" min="-20" max="50" step="5" value="0" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Session Length (1/&mu;)</span>
+            <span class="control-val" id="val-session">20 min</span>
+          </div>
+          <input type="range" id="slider-session" min="12" max="35" step="1" value="20" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Budget / Hour Trim</span>
+            <span class="control-val" id="val-budget-cut">0%</span>
+          </div>
+          <input type="range" id="slider-budget-cut" min="-20" max="35" step="5" value="0" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Nudge Peak to Quiet Hrs</span>
+            <span class="control-val" id="val-smoothing">0%</span>
+          </div>
+          <input type="range" id="slider-smoothing" min="0" max="30" step="5" value="0" />
+        </div>
+
+        <div class="control-item">
+          <div class="control-label">
+            <span>Optimization Objective</span>
+          </div>
+          <select id="select-objective">
+            <option value="balanced">Maximize Ratio &amp; Competency Match (Full Roster)</option>
+            <option value="subject_match">Strict Subject Spike Coverage (10am Trig / 1-4pm)</option>
+            <option value="min_cost">Minimize Weekly Cost (Subject to Wait &le; 8m)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="preset-pills">
+        <span style="font-size:0.73rem;color:var(--text-secondary);font-weight:600;margin-right:0.2rem;">Presets:</span>
+        <button class="preset-pill active" data-preset="baseline">Baseline Semester</button>
+        <button class="preset-pill" data-preset="midterm">+30% Midterm Rush</button>
+        <button class="preset-pill" data-preset="long_sessions">30-Min Sessions</button>
+        <button class="preset-pill" data-preset="budget_cut">-15% Budget Cut</button>
+        <button class="preset-pill" data-preset="demand_nudge">15% Quiet-Hour Nudge</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="main-container">
+
+    <!-- ==================================================================
+         TAB 1: EXECUTIVE OVERVIEW & PROPOSAL GRAPHS (GRAPHS 1, 2, 3)
+         ================================================================== -->
+    <section id="tab-overview" class="tab-panel active">
+
+      <!-- Dynamic Insight Callout -->
+      <div class="insight-banner">
+        <div class="insight-text" id="overview-insight-banner">
+          Loading model comparison...
+        </div>
+        <div style="display:flex;gap:0.5rem;align-items:center;">
+          <label for="select-overview-day" style="font-size:0.78rem;color:var(--text-secondary);font-weight:600;">View Day:</label>
+          <select id="select-overview-day" class="text-input" style="padding:0.3rem 0.6rem;">
+            <option value="AVG">Weekly Average (Mon–Thu)</option>
+            <option value="Monday">Monday</option>
+            <option value="Tuesday">Tuesday</option>
+            <option value="Wednesday">Wednesday</option>
+            <option value="Thursday">Thursday</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Top 5 KPI Comparison Cards -->
+      <div class="kpi-grid" id="kpi-summary-grid"></div>
+
+      <!-- Graph 1 & Graph 2 Side by Side -->
+      <div class="grid-2">
+        <!-- GRAPH 1: Hourly Student Inflow vs. Tutors on Duty -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Graph 1: Hourly Student Inflow (&lambda;<sub>t</sub>) vs. Tutoring Capacity</h2>
+              <p>Stacked arrivals by subject overlaid with Current vs. Optimized service capacity (&mu; &middot; x<sub>t</sub>)</p>
+            </div>
+            <span class="badge badge-blue">Proposal Fig. 1</span>
+          </div>
+          <div class="chart-box-tall">
+            <canvas id="chart-inflow-capacity"></canvas>
+          </div>
+        </div>
+
+        <!-- GRAPH 2: Simulated Student Queue / Wait Time by Hour -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Graph 2: Simulated Student Wait Time by Hour</h2>
+              <p>Current Static Staffing ("Highway Traffic Jam") vs. Optimized Dynamic Schedule &amp; 8-Min Target</p>
+            </div>
+            <span class="badge badge-emerald">Proposal Fig. 2</span>
+          </div>
+          <div class="chart-box-tall">
+            <canvas id="chart-wait-time"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Graph 3 & Subject Competency Breakdown -->
+      <div class="grid-2">
+        <!-- GRAPH 3: Trade-off Frontier (Budget vs. Wait Time) -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Graph 3: Trade-Off Frontier (Weekly Budget vs. Wait Time)</h2>
+              <p>Convex Pareto curve showing diminishing returns &amp; least-disruptive hour trimming under budget cuts</p>
+            </div>
+            <span class="badge badge-amber">Proposal Fig. 3</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="chart-tradeoff-frontier"></canvas>
+          </div>
+        </div>
+
+        <!-- Subject Competency Coverage & Overlooked Students Chart -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>"Eyes on Work": Overlooked Students &amp; 10 AM Trig Spike</h2>
+              <p>Students without adequate tutor attention or missing subject-competent tutors by hour</p>
+            </div>
+            <span class="badge badge-rose">Meeting Focus</span>
+          </div>
+          <div class="chart-box">
+            <canvas id="chart-overlooked"></canvas>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 2: "WHAT HAPPENED" VS. "WHAT COULD HAVE HAPPENED" SCHEDULE
+         ================================================================== -->
+    <section id="tab-schedule" class="tab-panel">
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Side-by-Side Schedule &amp; Tutor-to-Student Ratio Comparison</h2>
+            <p>Compare what happened this semester against the ILP-optimized schedule using the exact same staff pool. <strong>Tip:</strong> Click any tutor chip in the Optimized table to manually toggle shifts!</p>
+          </div>
+          <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+            <label style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Select Day:</label>
+            <select id="select-schedule-day" class="text-input">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+            </select>
+            <button class="btn btn-primary" id="btn-reoptimize-schedule">
+              ⚡ Re-Run ILP Optimizer
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrap" id="schedule-comparison-table-wrap"></div>
+      </div>
+
+      <!-- Roster Utilization & Contract Compliance Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Staff Roster Utilization &amp; Weekly Hour Constraints</h2>
+            <p>Verifies that 6 Graduate Assistants (GAs) and Undergrad Tutors (Donnie, Mariah, Taylor, Joe, etc.) strictly obey weekly hour limits and 1 man-hour per shift</p>
+          </div>
+          <span class="badge badge-emerald">100% Constraint Compliant</span>
+        </div>
+        <div class="table-wrap" id="roster-utilization-table-wrap"></div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 3: 4-HOUR PROTOTYPE & MATHEMATICAL FORMULATION
+         ================================================================== -->
+    <section id="tab-models" class="tab-panel">
+
+      <!-- Stage 2: Interactive 4-Hour Recurrence Relation Prototype -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Stage 2: Interactive 4-Hour Dynamic Recurrence Prototype</h2>
+            <p>Discrete queue state evolution: test how changing tutor counts x<sub>t</sub> affects student backlog accumulation W<sub>t+1</sub></p>
+          </div>
+          <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
+            <select id="proto-day-select" class="text-input">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+            </select>
+            <select id="proto-window-select" class="text-input">
+              <option value="afternoon">12:00 PM – 4:00 PM (Proposal Afternoon Rush)</option>
+              <option value="morning">9:00 AM – 1:00 PM (Includes 10:00 AM Trig Spike)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="math-box">
+          <div><strong>Discrete Queue Recurrence Relation (Proposal Section 2):</strong></div>
+          <div class="formula-line">
+            W<sub>t+1</sub> = max( 0,  W<sub>t</sub> + Arrivals<sub>t</sub> &minus; StudentsServed<sub>t</sub>(x<sub>t</sub>) )   where   StudentsServed<sub>t</sub>(x<sub>t</sub>) = &mu; &middot; x<sub>t</sub>
+          </div>
+          <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.25rem;">
+            With average tutoring duration 1/&mu; = <strong id="proto-mu-label">20</strong> min, each tutor serves &mu; = <strong id="proto-rate-label">3.00</strong> students/hour. Adjust the custom tutor count x<sub>t</sub> below to experiment live:
+          </div>
+        </div>
+
+        <div class="table-wrap" id="prototype-table-wrap"></div>
+      </div>
+
+      <!-- Stage 3 & Class Release Drivers -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Stage 3: Integer Linear Programming (ILP) Formulation</h2>
+              <p>Complete mathematical specification connecting cost minimization &amp; engagement maximization</p>
+            </div>
+            <span class="badge badge-blue">Operations Research Model</span>
+          </div>
+          <div class="math-box" style="margin-bottom:0;">
+            <p style="margin-bottom:0.5rem;"><strong>1. Binary Decision Variables:</strong></p>
+            <div class="formula-line">y<sub>i,d,t</sub> &in; {0, 1},   x<sub>d,t</sub> = &Sigma;<sub>i</sub> y<sub>i,d,t</sub> &in; &#8484;<sup>+</sup></div>
+            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+              where y<sub>i,d,t</sub> = 1 if tutor <em>i</em> is assigned on day <em>d</em> during hour block <em>t</em> (enforcing the rule that one tutor cannot cover more than 1 man-hour per shift).
+            </p>
+
+            <p style="margin-bottom:0.5rem;"><strong>2. Dual Objective Functions:</strong></p>
+            <div class="formula-line">
+              (A) Maximize Engagement / Minimize Queue:  Min &Sigma;<sub>d,t</sub> [ &alpha;&middot;W<sub>d,t+1</sub> + &beta;&middot;Overlooked<sub>d,t</sub> ]<br/>
+              (B) Cost Efficiency:  Min &Sigma;<sub>i,d,t</sub> (Wage<sub>i</sub> &middot; y<sub>i,d,t</sub>)
+            </div>
+
+            <p style="margin:0.75rem 0 0.5rem;"><strong>3. System Constraints:</strong></p>
+            <ul style="padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:0.4rem;">
+              <li><strong>Service &amp; Queue Stability:</strong> &mu; &middot; x<sub>d,t</sub> &ge; &lambda;<sub>d,t</sub> during peak blocks so wait time stays below 8–10 minutes.</li>
+              <li><strong>Staffing Tier Contracts:</strong> &Sigma;<sub>d,t</sub> y<sub>i,d,t</sub> = H<sub>i</sub> (20 hrs/wk for the 6 GAs; 10 hrs/wk for Donnie, Mariah, Taylor; 8 hrs/wk for Joe &amp; student workers).</li>
+              <li><strong>Subject Competency Coverage:</strong> &Sigma;<sub>i &in; C<sub>s</sub></sub> &mu; &middot; y<sub>i,d,t</sub> &ge; &lambda;<sub>d,t,s</sub> for each subject <em>s</em> &in; {Alg, Trig, Precalc, Calc, Stats}.</li>
+              <li><strong>Room &amp; Coverage Bounds:</strong> 1 &le; x<sub>d,t</sub> &le; C<sub>max</sub> for all operating hours (Mon–Thu, 9:00 AM – 5:00 PM).</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>Class Schedule Release Drivers (Why Fluxes Happen)</h2>
+              <p>Links lecture dismissal times directly to hourly subject arrival spikes (&lambda;<sub>t,s</sub>)</p>
+            </div>
+            <span class="badge badge-amber">Schedule Correlation</span>
+          </div>
+          <div class="table-wrap" id="class-schedule-summary-wrap"></div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 4: DATA, ROSTER & EXCEL IMPORT/EXPORT STUDIO
+         ================================================================== -->
+    <section id="tab-editor" class="tab-panel">
+
+      <!-- Import / Export Control Card -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Data &amp; File Management Center</h2>
+            <p>Import your Excel tracker (<code>Copy of Math Lab Participation Tracker 2026-2027.xlsx</code>), edit numbers live below, or export updated files for long-term use</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <label class="btn btn-primary" style="cursor:pointer;">
+              📂 Upload Excel (.xlsx) / CSV / JSON
+              <input type="file" id="file-upload-input" accept=".xlsx,.xls,.csv,.json" style="display:none;" />
+            </label>
+            <button class="btn btn-emerald" id="btn-download-datajs-2">
+              💾 Download Updated data.js
+            </button>
+            <button class="btn" id="btn-export-excel">
+              📊 Export Full Report (.xlsx)
+            </button>
+            <button class="btn btn-amber" id="btn-reset-defaults">
+              ↺ Reset to Default Baseline
+            </button>
+          </div>
+        </div>
+        <div style="font-size:0.82rem;color:var(--text-secondary);">
+          <strong>How Long-Term Editing Works:</strong> Every change you make in the tables below automatically updates all charts, recurrence equations, and the ILP optimizer in real time, and saves to your browser's local storage. Click <strong>"Download Updated data.js"</strong> anytime to replace the project's <code>data.js</code> file permanently.
+        </div>
+      </div>
+
+      <!-- Editable Tutor Roster & Competency Matrix -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>1. Edit Tutor Roster, Weekly Hour Caps &amp; Subject Competencies</h2>
+            <p>Modify GAs, Donnie, Mariah, Taylor, Joe, or add new tutors for next semester</p>
+          </div>
+          <button class="btn btn-primary" id="btn-add-tutor">
+            + Add New Tutor
+          </button>
+        </div>
+        <div class="table-wrap" id="editor-tutor-table-wrap"></div>
+      </div>
+
+      <!-- Editable Hourly Arrivals Grid -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>2. Edit Hourly Student Arrivals (&lambda;<sub>d,t,s</sub>) by Day &amp; Subject</h2>
+            <p>Adjust check-in counts per hour block (9:00 AM – 4:00 PM) for each math subject</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <label style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Edit Day:</label>
+            <select id="editor-arrival-day" class="text-input">
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrap" id="editor-arrivals-table-wrap"></div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <div id="toast" class="toast-notification">Saved changes!</div>
+
+  <!-- Modular Scripts -->
+  <script src="data.js"></script>
+  <script src="optimizer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
+
