@@ -58,6 +58,7 @@ def build_web_zip():
         "app.js",
         "README.md",
         "MATH319_Math_Lab_Dashboard_User_Guide.pdf",
+        "MATH319_5Min_Presentation_Slides_and_Script.pdf",
     ]
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for fname in web_files:
