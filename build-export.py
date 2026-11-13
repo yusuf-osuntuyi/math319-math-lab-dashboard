@@ -68,3 +68,4 @@ def build_web_zip():
 if __name__ == "__main__":
     build_standalone_html()
     build_web_zip()
+
