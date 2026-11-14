@@ -13,6 +13,35 @@
     return JSON.parse(JSON.stringify(obj));
   }
 
+  // Ensure classSchedule and lecturers have all required editable fields
+  function normalizeAppData(data) {
+    const def = window.MATH_LAB_DEFAULT_DATA;
+    if (!Array.isArray(data.lecturers) || data.lecturers.length === 0) {
+      data.lecturers = clone(def.lecturers || ["Prof. Ross", "Dr. Carter", "Prof. Reynolds", "Dr. Lin", "Prof. Alvarez", "Dr. Patel"]);
+    }
+    if (!Array.isArray(data.classSchedule)) {
+      data.classSchedule = clone(def.classSchedule);
+    }
+    data.classSchedule.forEach((c, i) => {
+      const defItem = (def.classSchedule && def.classSchedule[i]) || {};
+      if (!Array.isArray(c.lecturers)) {
+        c.lecturers = Array.isArray(defItem.lecturers) ? clone(defItem.lecturers) : ["Prof. Ross"];
+      }
+      c.lecturers.forEach(prof => {
+        if (prof && !data.lecturers.includes(prof)) {
+          data.lecturers.push(prof);
+        }
+      });
+      if (!Array.isArray(c.days) || c.days.length === 0) {
+        c.days = ["Monday", "Tuesday", "Wednesday", "Thursday"];
+      }
+      if (typeof c.walkIns !== "number" || isNaN(c.walkIns)) {
+        c.walkIns = Math.round(((c.enrolled || 0) * (c.expectedLabCapturePct || 10)) / 100);
+      }
+    });
+    return data;
+  }
+
   // Load state from localStorage or fallback to window.MATH_LAB_DEFAULT_DATA
   function loadInitialState() {
     try {
@@ -20,13 +49,13 @@
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.tutors && parsed.hourlyArrivals) {
-          return parsed;
+          return normalizeAppData(parsed);
         }
       }
     } catch (e) {
       console.warn("Could not read saved state from localStorage:", e);
     }
-    return clone(window.MATH_LAB_DEFAULT_DATA);
+    return normalizeAppData(clone(window.MATH_LAB_DEFAULT_DATA));
   }
 
   let appData = loadInitialState();
@@ -766,20 +795,163 @@
       });
     });
 
-    // Render Class Schedule Release Drivers table
+    // Helper to apply walk-in delta to hourlyArrivals when a class release driver is modified
+    function applyClassScheduleDelta(days, hourId, subjectId, deltaWalkIns) {
+      if (!deltaWalkIns || !hourId || !subjectId) return;
+      const targetDays = Array.isArray(days) && days.length > 0 ? days : appData.meta.operatingDays;
+      targetDays.forEach(d => {
+        if (appData.hourlyArrivals[d] && appData.hourlyArrivals[d][hourId]) {
+          const cur = Number(appData.hourlyArrivals[d][hourId][subjectId]) || 0;
+          appData.hourlyArrivals[d][hourId][subjectId] = Math.max(0, Math.round(cur + deltaWalkIns));
+        }
+      });
+    }
+
+    // Render Lecturer Pool Bar
+    const poolBarEl = document.getElementById("lecturer-pool-bar");
+    if (poolBarEl) {
+      const profChips = (appData.lecturers || []).map((prof, pIdx) => `
+        <span class="tutor-chip active" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.22rem 0.55rem;font-size:0.76rem;">
+          <span>👨‍🏫 ${prof}</span>
+          <button type="button" class="btn-remove-pool-prof" data-prof="${prof.replace(/"/g, '&quot;')}" title="Remove ${prof} from Lecturer dropdown list" style="background:none;border:none;color:var(--accent-rose);cursor:pointer;font-weight:800;font-size:0.78rem;padding:0 0.1rem;line-height:1;">✕</button>
+        </span>
+      `).join("");
+
+      poolBarEl.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;padding:0.65rem 0.85rem;background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:8px;">
+          <div style="display:flex;align-items:center;flex-wrap:wrap;gap:0.4rem;">
+            <span style="font-size:0.76rem;font-weight:700;color:var(--text-secondary);margin-right:0.25rem;">Department Lecturers Pool:</span>
+            ${profChips || '<span style="font-size:0.75rem;color:var(--text-muted);">No lecturers in pool yet</span>'}
+          </div>
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <input type="text" id="input-new-pool-prof" class="text-input" placeholder="e.g. Dr. Williams" style="width:155px;padding:0.28rem 0.55rem;font-size:0.78rem;" />
+            <button type="button" class="btn btn-emerald" id="btn-add-pool-prof" style="padding:0.28rem 0.65rem;font-size:0.76rem;">+ Add Lecturer</button>
+          </div>
+        </div>
+      `;
+
+      const addPoolBtn = document.getElementById("btn-add-pool-prof");
+      const addPoolInp = document.getElementById("input-new-pool-prof");
+      const handleAddPoolProf = () => {
+        const name = (addPoolInp.value || "").trim();
+        if (!name) return;
+        if (!appData.lecturers.includes(name)) {
+          appData.lecturers.push(name);
+          saveState(`Added ${name} to Lecturers dropdown list`);
+          renderModelsTab();
+        } else {
+          showToast(`${name} is already in the Lecturer list`);
+        }
+      };
+      addPoolBtn.addEventListener("click", handleAddPoolProf);
+      addPoolInp.addEventListener("keydown", e => {
+        if (e.key === "Enter") handleAddPoolProf();
+      });
+
+      poolBarEl.querySelectorAll(".btn-remove-pool-prof").forEach(btn => {
+        btn.addEventListener("click", e => {
+          const profName = e.currentTarget.getAttribute("data-prof");
+          appData.lecturers = appData.lecturers.filter(p => p !== profName);
+          appData.classSchedule.forEach(c => {
+            if (Array.isArray(c.lecturers)) {
+              c.lecturers = c.lecturers.filter(p => p !== profName);
+            }
+          });
+          saveState(`Removed ${profName} from Lecturers list`);
+          renderModelsTab();
+        });
+      });
+    }
+
+    // Render Editable Class Schedule Release Drivers table
     const subMap = {};
     appData.subjects.forEach(s => { subMap[s.id] = s; });
 
-    const classRows = appData.classSchedule.map(c => {
-      const s = subMap[c.subject];
-      const estWalkins = Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
+    const classRows = appData.classSchedule.map((c, idx) => {
+      const s = subMap[c.subject] || appData.subjects[0];
+      const walkInsVal = typeof c.walkIns === "number"
+        ? c.walkIns
+        : Math.round(((c.enrolled || 0) * (c.expectedLabCapturePct || 10)) / 100);
+      const capturePct = c.enrolled > 0 ? Math.round((walkInsVal / c.enrolled) * 100) : 0;
+
+      // Subject dropdown options
+      const subjectOptions = appData.subjects.map(sub => `
+        <option value="${sub.id}" ${sub.id === c.subject ? "selected" : ""}>${sub.name} (${sub.short})</option>
+      `).join("");
+
+      // Release hour dropdown options
+      const releaseHourOptions = appData.meta.operatingHours.map(h => `
+        <option value="${h.id}" ${h.id === c.releaseHour ? "selected" : ""}>Lets out &rarr; ${h.label} (${h.id})</option>
+      `).join("");
+
+      // Assigned lecturers badges for this class & section
+      const assignedList = Array.isArray(c.lecturers) ? c.lecturers : [];
+      const assignedBadges = assignedList.map(prof => `
+        <span class="badge badge-blue" style="display:inline-flex;align-items:center;gap:0.28rem;margin:0.12rem 0.2rem 0.12rem 0;padding:0.2rem 0.48rem;font-size:0.73rem;">
+          <span>${prof}</span>
+          <button type="button" class="btn-remove-class-prof" data-idx="${idx}" data-prof="${prof.replace(/"/g, '&quot;')}" title="Remove ${prof} from ${c.code}" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:800;font-size:0.75rem;padding:0;line-height:1;">✕</button>
+        </span>
+      `).join("");
+
+      // Dropdown options to assign a professor to this class & section
+      const profDropdownOptions = (appData.lecturers || []).map(prof => `
+        <option value="${prof.replace(/"/g, '&quot;')}">${assignedList.includes(prof) ? "✓ " : "+ "}${prof}</option>
+      `).join("");
+
       return `
         <tr>
-          <td><strong>${c.code}</strong><br/><span style="font-size:0.74rem;color:var(--text-secondary);">${c.title}</span></td>
-          <td><span class="subject-pill" style="background:${s ? s.color : '#3b82f6'}">${s ? s.short : c.subject}</span></td>
-          <td style="font-size:0.78rem;">${c.classTime}<br/><strong style="color:var(--accent-amber);">Lets out &rarr; ${c.releaseHour}</strong></td>
-          <td style="font-family:'JetBrains Mono',monospace;">${c.enrolled} enrolled<br/><span style="color:var(--accent-emerald);">~${estWalkins} walk-ins/hr</span></td>
-          <td style="font-size:0.77rem;color:var(--text-secondary);">${c.impactNote}</td>
+          <td style="min-width:175px;">
+            <input type="text" class="text-input edit-class-code" data-idx="${idx}" value="${(c.code || '').replace(/"/g, '&quot;')}" placeholder="Course Code (e.g. MATH 112-01)" style="width:100%;font-weight:700;margin-bottom:0.3rem;padding:0.28rem 0.5rem;font-size:0.8rem;" />
+            <input type="text" class="text-input edit-class-title" data-idx="${idx}" value="${(c.title || '').replace(/"/g, '&quot;')}" placeholder="Section Title" style="width:100%;font-size:0.74rem;color:var(--text-secondary);padding:0.24rem 0.5rem;" />
+          </td>
+          <td style="min-width:155px;">
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <span style="width:10px;height:10px;border-radius:50%;background:${s ? s.color : '#3b82f6'};flex-shrink:0;"></span>
+              <select class="text-input edit-class-subject" data-idx="${idx}" style="width:100%;font-weight:600;padding:0.28rem 0.45rem;font-size:0.78rem;">
+                ${subjectOptions}
+              </select>
+            </div>
+          </td>
+          <td style="min-width:215px;">
+            <div style="margin-bottom:0.3rem;min-height:24px;">
+              ${assignedBadges || '<span style="font-size:0.73rem;color:var(--text-muted);">No lecturer assigned</span>'}
+            </div>
+            <div style="display:flex;gap:0.3rem;align-items:center;margin-bottom:0.28rem;">
+              <select class="text-input select-class-prof" data-idx="${idx}" style="width:100%;padding:0.24rem 0.45rem;font-size:0.75rem;">
+                <option value="">+ Assign / Toggle Lecturer...</option>
+                ${profDropdownOptions}
+              </select>
+            </div>
+            <div style="display:flex;gap:0.25rem;align-items:center;">
+              <input type="text" class="text-input input-row-new-prof" data-idx="${idx}" placeholder="New Prof. Name..." style="width:100%;padding:0.2rem 0.45rem;font-size:0.73rem;" />
+              <button type="button" class="btn btn-primary btn-row-add-prof" data-idx="${idx}" title="Add new professor to this section & dropdown" style="padding:0.2rem 0.5rem;font-size:0.72rem;white-space:nowrap;">+ Add</button>
+            </div>
+          </td>
+          <td style="min-width:175px;">
+            <input type="text" class="text-input edit-class-time" data-idx="${idx}" value="${(c.classTime || '').replace(/"/g, '&quot;')}" placeholder="e.g. 9:00 AM – 9:50 AM" style="width:100%;font-size:0.77rem;margin-bottom:0.3rem;padding:0.26rem 0.5rem;" />
+            <select class="text-input edit-class-release" data-idx="${idx}" style="width:100%;font-weight:700;color:var(--accent-amber);padding:0.26rem 0.45rem;font-size:0.77rem;">
+              ${releaseHourOptions}
+            </select>
+          </td>
+          <td style="min-width:165px;font-family:'JetBrains Mono',monospace;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.35rem;margin-bottom:0.3rem;">
+              <span style="font-size:0.73rem;color:var(--text-secondary);">Enrolled:</span>
+              <input type="number" class="num-input edit-class-enrolled" data-idx="${idx}" min="0" max="1000" value="${c.enrolled}" style="width:72px;padding:0.22rem 0.4rem;font-size:0.78rem;" />
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.35rem;">
+              <span style="font-size:0.73rem;color:var(--accent-emerald);font-weight:700;">Walk-ins/hr:</span>
+              <input type="number" class="num-input edit-class-walkins" data-idx="${idx}" min="0" max="500" value="${walkInsVal}" style="width:72px;padding:0.22rem 0.4rem;font-size:0.78rem;border-color:var(--accent-emerald);" />
+            </div>
+            <div style="font-size:0.69rem;color:var(--text-muted);text-align:right;margin-top:0.18rem;">
+              ~${capturePct}% lab capture rate
+            </div>
+          </td>
+          <td style="min-width:180px;">
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="text" class="text-input edit-class-note" data-idx="${idx}" value="${(c.impactNote || '').replace(/"/g, '&quot;')}" placeholder="Lab impact note..." style="width:100%;font-size:0.75rem;padding:0.26rem 0.5rem;" />
+              <button type="button" class="btn btn-delete-class-row" data-idx="${idx}" title="Remove this course section" style="padding:0.24rem 0.5rem;color:var(--accent-rose);border-color:rgba(244,63,94,0.35);font-size:0.76rem;">✕</button>
+            </div>
+          </td>
         </tr>
       `;
     }).join("");
@@ -790,14 +962,191 @@
           <tr>
             <th>Course Section</th>
             <th>Subject</th>
+            <th>Lecturer (Add / Remove per Section)</th>
             <th>Lecture &amp; Release Time</th>
             <th>Enrolled / Walk-Ins</th>
-            <th>Lab Impact</th>
+            <th>Lab Impact &amp; Actions</th>
           </tr>
         </thead>
         <tbody>${classRows}</tbody>
       </table>
     `;
+
+    // Bind events for editable Class Schedule Release Drivers
+    document.querySelectorAll(".edit-class-code").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        appData.classSchedule[idx].code = e.target.value.trim();
+        saveState(`Updated course code: ${appData.classSchedule[idx].code}`);
+      });
+    });
+
+    document.querySelectorAll(".edit-class-title").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        appData.classSchedule[idx].title = e.target.value.trim();
+        saveState(`Updated section title for ${appData.classSchedule[idx].code}`);
+      });
+    });
+
+    document.querySelectorAll(".edit-class-subject").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        const c = appData.classSchedule[idx];
+        const oldSub = c.subject;
+        const newSub = e.target.value;
+        const walkInsVal = typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
+        if (oldSub !== newSub) {
+          applyClassScheduleDelta(c.days, c.releaseHour, oldSub, -walkInsVal);
+          applyClassScheduleDelta(c.days, c.releaseHour, newSub, walkInsVal);
+          c.subject = newSub;
+          saveState(`Updated ${c.code} subject to ${newSub.toUpperCase()}`);
+          renderAll(true);
+        }
+      });
+    });
+
+    // Lecturer dropdown select / toggle per class & section
+    document.querySelectorAll(".select-class-prof").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        const prof = e.target.value;
+        if (!prof) return;
+        const c = appData.classSchedule[idx];
+        if (!Array.isArray(c.lecturers)) c.lecturers = [];
+        if (c.lecturers.includes(prof)) {
+          c.lecturers = c.lecturers.filter(p => p !== prof);
+          saveState(`Removed ${prof} from ${c.code}`);
+        } else {
+          c.lecturers.push(prof);
+          saveState(`Assigned ${prof} to ${c.code}`);
+        }
+        renderModelsTab();
+      });
+    });
+
+    // Remove assigned lecturer badge from a specific class & section
+    document.querySelectorAll(".btn-remove-class-prof").forEach(btn => {
+      btn.addEventListener("click", e => {
+        const idx = Number(e.currentTarget.getAttribute("data-idx"));
+        const prof = e.currentTarget.getAttribute("data-prof");
+        const c = appData.classSchedule[idx];
+        if (Array.isArray(c.lecturers)) {
+          c.lecturers = c.lecturers.filter(p => p !== prof);
+          saveState(`Removed ${prof} from ${c.code}`);
+          renderModelsTab();
+        }
+      });
+    });
+
+    // Add brand-new professor directly inside a class row
+    document.querySelectorAll(".btn-row-add-prof").forEach(btn => {
+      btn.addEventListener("click", e => {
+        const idx = Number(e.currentTarget.getAttribute("data-idx"));
+        const inp = document.querySelector(`.input-row-new-prof[data-idx="${idx}"]`);
+        const name = inp ? inp.value.trim() : "";
+        if (!name) return;
+        if (!appData.lecturers.includes(name)) {
+          appData.lecturers.push(name);
+        }
+        const c = appData.classSchedule[idx];
+        if (!Array.isArray(c.lecturers)) c.lecturers = [];
+        if (!c.lecturers.includes(name)) {
+          c.lecturers.push(name);
+        }
+        saveState(`Added lecturer ${name} to ${c.code}`);
+        renderModelsTab();
+      });
+    });
+
+    document.querySelectorAll(".input-row-new-prof").forEach(inp => {
+      inp.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+          const idx = Number(e.target.getAttribute("data-idx"));
+          const btn = document.querySelector(`.btn-row-add-prof[data-idx="${idx}"]`);
+          if (btn) btn.click();
+        }
+      });
+    });
+
+    // Lecture time text input
+    document.querySelectorAll(".edit-class-time").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        appData.classSchedule[idx].classTime = e.target.value.trim();
+        saveState(`Updated lecture time for ${appData.classSchedule[idx].code}`);
+      });
+    });
+
+    // Release hour dropdown
+    document.querySelectorAll(".edit-class-release").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        const c = appData.classSchedule[idx];
+        const oldHr = c.releaseHour;
+        const newHr = e.target.value;
+        const walkInsVal = typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
+        if (oldHr !== newHr) {
+          applyClassScheduleDelta(c.days, oldHr, c.subject, -walkInsVal);
+          applyClassScheduleDelta(c.days, newHr, c.subject, walkInsVal);
+          c.releaseHour = newHr;
+          saveState(`Moved ${c.code} release wave from ${oldHr} to ${newHr}`);
+          renderAll(true);
+        }
+      });
+    });
+
+    // Enrolled count input
+    document.querySelectorAll(".edit-class-enrolled").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        const c = appData.classSchedule[idx];
+        c.enrolled = Math.max(0, parseInt(e.target.value, 10) || 0);
+        const walkInsVal = typeof c.walkIns === "number" ? c.walkIns : 0;
+        c.expectedLabCapturePct = c.enrolled > 0 ? Math.round((walkInsVal / c.enrolled) * 100) : 0;
+        saveState(`Updated enrollment for ${c.code} (${c.enrolled} students)`);
+        renderModelsTab();
+      });
+    });
+
+    // Walk-ins per hour input (syncs delta directly to hourlyArrivals & model!)
+    document.querySelectorAll(".edit-class-walkins").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        const c = appData.classSchedule[idx];
+        const oldWalkIns = typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
+        const newWalkIns = Math.max(0, parseInt(e.target.value, 10) || 0);
+        const delta = newWalkIns - oldWalkIns;
+        c.walkIns = newWalkIns;
+        c.expectedLabCapturePct = c.enrolled > 0 ? Math.round((newWalkIns / c.enrolled) * 100) : 0;
+        applyClassScheduleDelta(c.days, c.releaseHour, c.subject, delta);
+        saveState(`Updated ${c.code} walk-ins to ~${newWalkIns}/hr`);
+        renderAll(true);
+      });
+    });
+
+    // Lab impact note input
+    document.querySelectorAll(".edit-class-note").forEach(el => {
+      el.addEventListener("change", e => {
+        const idx = Number(e.target.getAttribute("data-idx"));
+        appData.classSchedule[idx].impactNote = e.target.value.trim();
+        saveState(`Updated impact note for ${appData.classSchedule[idx].code}`);
+      });
+    });
+
+    // Delete class section row
+    document.querySelectorAll(".btn-delete-class-row").forEach(btn => {
+      btn.addEventListener("click", e => {
+        const idx = Number(e.currentTarget.getAttribute("data-idx"));
+        const removed = appData.classSchedule.splice(idx, 1)[0];
+        if (removed) {
+          const walkInsVal = typeof removed.walkIns === "number" ? removed.walkIns : 0;
+          applyClassScheduleDelta(removed.days, removed.releaseHour, removed.subject, -walkInsVal);
+          saveState(`Removed course section ${removed.code}`);
+          renderAll(true);
+        }
+      });
+    });
   }
 
   // ==========================================================================
@@ -1081,6 +1430,20 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rosterRows), "Tutor_Roster");
 
+    // Sheet 3: Class Schedule Release Drivers
+    const classDriverRows = (appData.classSchedule || []).map(c => ({
+      Course_Section: c.code,
+      Title: c.title,
+      Subject: c.subject,
+      Lecturers: Array.isArray(c.lecturers) ? c.lecturers.join(", ") : "",
+      Lecture_Time: c.classTime,
+      Release_Hour: c.releaseHour,
+      Enrolled: c.enrolled,
+      Walk_Ins_Per_Hr: typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * (c.expectedLabCapturePct || 10)) / 100),
+      Impact_Note: c.impactNote
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(classDriverRows), "Class_Release_Drivers");
+
     XLSX.writeFile(wb, "Math319_Math_Lab_Optimization_Report.xlsx");
     showToast("Exported Excel report (.xlsx)!");
   }
@@ -1095,7 +1458,7 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         try {
           const parsed = JSON.parse(e.target.result);
           if (parsed.tutors && parsed.hourlyArrivals) {
-            appData = parsed;
+            appData = normalizeAppData(parsed);
             appData.meta.dataSourceName = file.name;
             saveState(`Imported ${file.name}`);
             renderAll(true);
@@ -1279,6 +1642,36 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     document.getElementById("proto-day-select").addEventListener("change", () => renderModelsTab());
     document.getElementById("proto-window-select").addEventListener("change", () => renderModelsTab());
     document.getElementById("editor-arrival-day").addEventListener("change", () => renderEditorTab());
+
+    // Add New Course Section button in Tab 3 (Class Schedule Release Drivers)
+    const btnAddClassSection = document.getElementById("btn-add-class-section");
+    if (btnAddClassSection) {
+      btnAddClassSection.addEventListener("click", () => {
+        const nextNum = appData.classSchedule.length + 1;
+        const defaultProf = (appData.lecturers && appData.lecturers[0]) ? [appData.lecturers[0]] : ["Prof. Ross"];
+        const newSection = {
+          code: `MATH 10${nextNum}-01`,
+          subject: "alg",
+          title: "New Course Section (Mon–Thu)",
+          lecturers: defaultProf,
+          days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
+          classTime: "11:00 AM – 11:50 AM",
+          releaseHour: "12:00",
+          enrolled: 50,
+          walkIns: 6,
+          expectedLabCapturePct: 12,
+          impactNote: "Custom lecture release wave added via Dashboard"
+        };
+        appData.classSchedule.push(newSection);
+        appData.meta.operatingDays.forEach(d => {
+          if (appData.hourlyArrivals[d] && appData.hourlyArrivals[d]["12:00"]) {
+            appData.hourlyArrivals[d]["12:00"].alg = Math.max(0, (appData.hourlyArrivals[d]["12:00"].alg || 0) + 6);
+          }
+        });
+        saveState(`Added course section ${newSection.code}`);
+        renderAll(true);
+      });
+    }
 
     // Add New Tutor button
     document.getElementById("btn-add-tutor").addEventListener("click", () => {

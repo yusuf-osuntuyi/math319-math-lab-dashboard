@@ -345,9 +345,13 @@ def build_pdf():
          "&bull; <b>Binary Variable y(i,d,t) in {0, 1}:</b> A fancy math way of saying a tutor is either working that hour (<b>1</b>) or not working that hour (<b>0</b>)—no one can work \"2 hours inside 1 hour.\"<br/>"
          "&bull; <b>Dual Objectives:</b> Minimize waiting lines/overlooked students AND keep payroll costs efficient.<br/>"
          "&bull; <b>4 Constraints:</b> Keep wait times under 8–10 minutes, obey everyone's weekly hour limits, match tutor subjects to student subjects, and stay within room limits."),
-        ("Class Schedule Release Drivers Table",
-         "Shows the real-world reason why traffic spikes happen: lists the exact lecture dismissal times (like 9:50 AM Trigonometry and 12:50 PM Algebra/Calc) "
-         "and shows how each dismissal creates a wave of students walking into the Math Lab 5–10 minutes later."),
+        ("Class Schedule Release Drivers\n(Live Editable Table + Lecturer Dropdown)",
+         "Shows and lets you edit the real-world lecture releases that cause Math Lab rushes:<br/>"
+         "&bull; <b>Course Section &amp; Title:</b> Edit the course code (e.g., <i>MATH 112-01</i>) or section description, or click <b>+ Add Course Section</b> to add a new class.<br/>"
+         "&bull; <b>Subject Dropdown:</b> Switch any course section between Algebra, Trigonometry, Precalculus, Calculus, or Statistics.<br/>"
+         "&bull; <b>Lecturer Column (Dropdown + Add/Remove Professors):</b> Select or toggle professors from the dropdown for each class &amp; section, click the <b>X</b> on any professor badge to remove them from that section, or type a new professor's name right in the row (or in the top <i>Department Lecturers Pool</i> bar) and click <b>+ Add</b>.<br/>"
+         "&bull; <b>Lecture &amp; Release Time:</b> Edit the lecture time text and use the <b>Lets out &rarr;</b> dropdown to change which hour block receives the student wave.<br/>"
+         "&bull; <b>Enrolled &amp; Walk-Ins/hr:</b> Edit total enrollment or hourly walk-ins—changing walk-ins, subject, or release time automatically updates the Math Lab's arrival counts and recalculates the 4-Hour Prototype and schedule live!"),
     ]
     story.append(make_feature_table(tab3_rows))
 

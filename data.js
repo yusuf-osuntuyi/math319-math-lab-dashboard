@@ -210,15 +210,26 @@ window.MATH_LAB_DEFAULT_DATA = {
   //    let out (e.g., 10:00 AM Trig release, 1:00 PM - 3:00 PM lectures),
   //    waves of students walk directly into the Math Lab.
   // --------------------------------------------------------------------------
+  lecturers: [
+    "Prof. Ross",
+    "Dr. Carter",
+    "Prof. Reynolds",
+    "Dr. Lin",
+    "Prof. Alvarez",
+    "Dr. Patel"
+  ],
+
   classSchedule: [
     {
       code: "MATH 112-01",
       subject: "trig",
       title: "Trigonometry (Morning Section)",
+      lecturers: ["Prof. Ross"],
       days: ["Monday", "Wednesday"],
       classTime: "9:00 AM – 9:50 AM",
       releaseHour: "10:00",
       enrolled: 68,
+      walkIns: 12,
       expectedLabCapturePct: 18,
       impactNote: "Major 10:00 AM Trigonometry rush right after class ends"
     },
@@ -226,10 +237,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       code: "MATH 112-02",
       subject: "trig",
       title: "Trigonometry (Tue/Thu Morning)",
+      lecturers: ["Dr. Carter"],
       days: ["Tuesday", "Thursday"],
       classTime: "8:30 AM – 9:50 AM",
       releaseHour: "10:00",
       enrolled: 62,
+      walkIns: 10,
       expectedLabCapturePct: 16,
       impactNote: "Creates 10:00 AM Trig bottleneck if Trig tutors aren't scheduled"
     },
@@ -237,10 +250,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       code: "MATH 111-01/02",
       subject: "alg",
       title: "College Algebra (3 Lecture Sections)",
+      lecturers: ["Prof. Reynolds", "Dr. Lin"],
       days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
       classTime: "12:00 PM – 12:50 PM",
       releaseHour: "13:00",
       enrolled: 145,
+      walkIns: 15,
       expectedLabCapturePct: 10,
       impactNote: "Triggers the 1:00 PM afternoon influx of Algebra students"
     },
@@ -248,10 +263,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       code: "MATH 115-01/02",
       subject: "pre",
       title: "Precalculus (Midday Combined)",
+      lecturers: ["Prof. Alvarez"],
       days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
       classTime: "1:00 PM – 1:50 PM",
       releaseHour: "14:00",
       enrolled: 110,
+      walkIns: 12,
       expectedLabCapturePct: 11,
       impactNote: "Compounds the 2:00 PM peak queue buildup"
     },
@@ -259,10 +276,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       code: "MATH 200-01/02",
       subject: "stats",
       title: "Elementary Statistics",
+      lecturers: ["Dr. Patel"],
       days: ["Monday", "Wednesday", "Thursday"],
       classTime: "1:00 PM – 2:15 PM",
       releaseHour: "14:00",
       enrolled: 95,
+      walkIns: 9,
       expectedLabCapturePct: 9,
       impactNote: "Afternoon Statistics wave between 2:00 PM and 4:00 PM"
     },
@@ -270,10 +289,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       code: "MATH 161-01",
       subject: "calc",
       title: "Calculus I",
+      lecturers: ["Prof. Ross"],
       days: ["Monday", "Tuesday", "Wednesday", "Thursday"],
       classTime: "2:00 PM – 2:50 PM",
       releaseHour: "15:00",
       enrolled: 74,
+      walkIns: 7,
       expectedLabCapturePct: 10,
       impactNote: "3:00 PM Calculus problem-session rush"
     }

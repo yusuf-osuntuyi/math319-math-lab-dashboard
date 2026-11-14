@@ -297,48 +297,53 @@
         <div class="table-wrap" id="prototype-table-wrap"></div>
       </div>
 
-      <!-- Stage 3 & Class Release Drivers -->
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <h2>Stage 3: Integer Linear Programming (ILP) Formulation</h2>
-              <p>Complete mathematical specification connecting cost minimization &amp; engagement maximization</p>
-            </div>
-            <span class="badge badge-blue">Operations Research Model</span>
+      <!-- Class Schedule Release Drivers (Full-Width Editable Card) -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Class Schedule Release Drivers (Why Fluxes Happen)</h2>
+            <p>Edit course sections, subjects, lecturers (add/remove professors per class &amp; section), lecture &amp; release times, and enrolled walk-ins (&lambda;<sub>t,s</sub>)</p>
           </div>
-          <div class="math-box" style="margin-bottom:0;">
-            <p style="margin-bottom:0.5rem;"><strong>1. Binary Decision Variables:</strong></p>
-            <div class="formula-line">y<sub>i,d,t</sub> &in; {0, 1},   x<sub>d,t</sub> = &Sigma;<sub>i</sub> y<sub>i,d,t</sub> &in; &#8484;<sup>+</sup></div>
-            <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;">
-              where y<sub>i,d,t</sub> = 1 if tutor <em>i</em> is assigned on day <em>d</em> during hour block <em>t</em> (enforcing the rule that one tutor cannot cover more than 1 man-hour per shift).
-            </p>
-
-            <p style="margin-bottom:0.5rem;"><strong>2. Dual Objective Functions:</strong></p>
-            <div class="formula-line">
-              (A) Maximize Engagement / Minimize Queue:  Min &Sigma;<sub>d,t</sub> [ &alpha;&middot;W<sub>d,t+1</sub> + &beta;&middot;Overlooked<sub>d,t</sub> ]<br/>
-              (B) Cost Efficiency:  Min &Sigma;<sub>i,d,t</sub> (Wage<sub>i</sub> &middot; y<sub>i,d,t</sub>)
-            </div>
-
-            <p style="margin:0.75rem 0 0.5rem;"><strong>3. System Constraints:</strong></p>
-            <ul style="padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:0.4rem;">
-              <li><strong>Service &amp; Queue Stability:</strong> &mu; &middot; x<sub>d,t</sub> &ge; &lambda;<sub>d,t</sub> during peak blocks so wait time stays below 8–10 minutes.</li>
-              <li><strong>Staffing Tier Contracts:</strong> &Sigma;<sub>d,t</sub> y<sub>i,d,t</sub> = H<sub>i</sub> (20 hrs/wk for the 6 GAs; 10 hrs/wk for Donnie, Mariah, Taylor; 8 hrs/wk for Joe &amp; student workers).</li>
-              <li><strong>Subject Competency Coverage:</strong> &Sigma;<sub>i &in; C<sub>s</sub></sub> &mu; &middot; y<sub>i,d,t</sub> &ge; &lambda;<sub>d,t,s</sub> for each subject <em>s</em> &in; {Alg, Trig, Precalc, Calc, Stats}.</li>
-              <li><strong>Room &amp; Coverage Bounds:</strong> 1 &le; x<sub>d,t</sub> &le; C<sub>max</sub> for all operating hours (Mon–Thu, 9:00 AM – 5:00 PM).</li>
-            </ul>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span class="badge badge-amber">Live Schedule Correlation</span>
+            <button class="btn btn-primary" id="btn-add-class-section">
+              + Add Course Section
+            </button>
           </div>
         </div>
+        <div id="lecturer-pool-bar" style="margin-bottom:0.85rem;"></div>
+        <div class="table-wrap" id="class-schedule-summary-wrap"></div>
+      </div>
 
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title-group">
-              <h2>Class Schedule Release Drivers (Why Fluxes Happen)</h2>
-              <p>Links lecture dismissal times directly to hourly subject arrival spikes (&lambda;<sub>t,s</sub>)</p>
-            </div>
-            <span class="badge badge-amber">Schedule Correlation</span>
+      <!-- Stage 3: ILP Formulation -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>Stage 3: Integer Linear Programming (ILP) Formulation</h2>
+            <p>Complete mathematical specification connecting cost minimization &amp; engagement maximization</p>
           </div>
-          <div class="table-wrap" id="class-schedule-summary-wrap"></div>
+          <span class="badge badge-blue">Operations Research Model</span>
+        </div>
+        <div class="math-box" style="margin-bottom:0;">
+          <p style="margin-bottom:0.5rem;"><strong>1. Binary Decision Variables:</strong></p>
+          <div class="formula-line">y<sub>i,d,t</sub> &in; {0, 1},   x<sub>d,t</sub> = &Sigma;<sub>i</sub> y<sub>i,d,t</sub> &in; &#8484;<sup>+</sup></div>
+          <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;">
+            where y<sub>i,d,t</sub> = 1 if tutor <em>i</em> is assigned on day <em>d</em> during hour block <em>t</em> (enforcing the rule that one tutor cannot cover more than 1 man-hour per shift).
+          </p>
+
+          <p style="margin-bottom:0.5rem;"><strong>2. Dual Objective Functions:</strong></p>
+          <div class="formula-line">
+            (A) Maximize Engagement / Minimize Queue:  Min &Sigma;<sub>d,t</sub> [ &alpha;&middot;W<sub>d,t+1</sub> + &beta;&middot;Overlooked<sub>d,t</sub> ]<br/>
+            (B) Cost Efficiency:  Min &Sigma;<sub>i,d,t</sub> (Wage<sub>i</sub> &middot; y<sub>i,d,t</sub>)
+          </div>
+
+          <p style="margin:0.75rem 0 0.5rem;"><strong>3. System Constraints:</strong></p>
+          <ul style="padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:0.4rem;">
+            <li><strong>Service &amp; Queue Stability:</strong> &mu; &middot; x<sub>d,t</sub> &ge; &lambda;<sub>d,t</sub> during peak blocks so wait time stays below 8–10 minutes.</li>
+            <li><strong>Staffing Tier Contracts:</strong> &Sigma;<sub>d,t</sub> y<sub>i,d,t</sub> = H<sub>i</sub> (20 hrs/wk for the 6 GAs; 10 hrs/wk for Donnie, Mariah, Taylor; 8 hrs/wk for Joe &amp; student workers).</li>
+            <li><strong>Subject Competency Coverage:</strong> &Sigma;<sub>i &in; C<sub>s</sub></sub> &mu; &middot; y<sub>i,d,t</sub> &ge; &lambda;<sub>d,t,s</sub> for each subject <em>s</em> &in; {Alg, Trig, Precalc, Calc, Stats}.</li>
+            <li><strong>Room &amp; Coverage Bounds:</strong> 1 &le; x<sub>d,t</sub> &le; C<sub>max</sub> for all operating hours (Mon–Thu, 9:00 AM – 5:00 PM).</li>
+          </ul>
         </div>
       </div>
 
