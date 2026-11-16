@@ -431,6 +431,18 @@
       <!-- Top Summary KPI Bar for QR Check-In System -->
       <div class="kpi-grid" id="qr-kpi-grid"></div>
 
+      <!-- IDEA #1: 2x DOUBLE XP QUIET-HOUR BONUS & BUSYNESS FORECAST BAR -->
+      <div class="card" style="border-color:rgba(16,185,129,0.45);">
+        <div class="card-header" style="margin-bottom:0.65rem;">
+          <div class="card-title-group">
+            <h2>⚡ Live Math Lab Busyness Forecast &amp; 2x Double XP Quiet-Hour Bonus</h2>
+            <p>Gamifies your model's <strong>Quiet-Hour Demand Nudge</strong>: students who check in during green quiet hours (9:00 AM, 11:00 AM, or 4:00 PM) earn <strong>+100 XP (2x Bonus!)</strong> and the <em>⚡ 2x Quiet-Hour Strategist</em> badge. Click any hour below to set the active check-in hour:</p>
+          </div>
+          <span class="badge badge-emerald" id="qr-active-hour-bonus-badge">Active Check-In Hour: 10:00 AM (+50 XP)</span>
+        </div>
+        <div class="busyness-bar-grid" id="qr-busyness-bar-grid"></div>
+      </div>
+
       <div class="grid-2">
         <!-- Left Card: QR Code #1 (CHECK-IN) & 5-Second Student Check-In Form -->
         <div class="card">
@@ -619,6 +631,84 @@
     </section>
 
   </main>
+
+  <!-- ON-SCREEN STUDENT BIO POP-UP MODAL (<dialog closedby="any">) -->
+  <dialog id="student-bio-dialog" class="bio-modal" closedby="any" aria-labelledby="bio-dialog-title">
+    <div class="bio-modal-inner">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;padding-bottom:0.85rem;border-bottom:1px solid var(--border-color);">
+        <div style="display:flex;align-items:center;gap:1rem;">
+          <div id="bio-modal-avatar-preview"></div>
+          <div>
+            <span class="badge badge-blue" id="bio-modal-level-badge">Level 1</span>
+            <h2 id="bio-dialog-title" style="font-size:1.3rem;font-weight:800;margin:0.25rem 0 0.1rem;">Student Bio</h2>
+            <div id="bio-modal-subtitle" style="font-size:0.8rem;color:var(--text-secondary);"></div>
+          </div>
+        </div>
+        <form method="dialog">
+          <button type="submit" class="btn" value="close" aria-label="Close Student Bio Modal" style="padding:0.3rem 0.65rem;">✕ Close</button>
+        </form>
+      </div>
+
+      <form id="student-bio-form" action="#tab-qr" method="POST">
+        <input type="hidden" id="bio-profile-index" name="profile_index" value="-1" />
+
+        <!-- 16-Bit Cartoon Avatar Collection Selector + Custom Upload -->
+        <div style="margin-bottom:1rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;">
+            <label style="font-size:0.8rem;font-weight:700;color:var(--text-secondary);">
+              🕹️ Choose 16-Bit Cartoon Avatar (or Upload Picture):
+            </label>
+            <label class="btn" style="cursor:pointer;font-size:0.73rem;padding:0.24rem 0.6rem;">
+              📷 Upload Custom Image
+              <input type="file" id="bio-custom-avatar-input" accept="image/*" style="display:none;" />
+            </label>
+          </div>
+          <div class="avatar-picker-grid" id="bio-avatar-picker-grid"></div>
+        </div>
+
+        <!-- First Name & Last Name -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label for="bio-first-name" style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.25rem;">First Name *</label>
+            <input type="text" id="bio-first-name" name="first_name" class="text-input" required style="width:100%;font-weight:700;" />
+          </div>
+          <div>
+            <label for="bio-last-name" style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.25rem;">Last Name *</label>
+            <input type="text" id="bio-last-name" name="last_name" class="text-input" required style="width:100%;font-weight:700;" />
+          </div>
+        </div>
+
+        <!-- Major & Enrolled Course -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;margin-bottom:0.75rem;">
+          <div>
+            <label for="bio-major" style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.25rem;">Academic Major</label>
+            <input type="text" id="bio-major" name="major" class="text-input" placeholder="e.g. Mechanical Engineering" style="width:100%;" />
+          </div>
+          <div>
+            <label for="bio-course-select" style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.25rem;">Enrolled Math Course &amp; Lecturer</label>
+            <select id="bio-course-select" name="course_code" class="text-input" style="width:100%;"></select>
+          </div>
+        </div>
+
+        <!-- Hobbies -->
+        <div style="margin-bottom:1rem;">
+          <label for="bio-hobbies" style="display:block;font-size:0.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.25rem;">Hobbies &amp; Campus Interests</label>
+          <textarea id="bio-hobbies" name="hobbies" class="text-input" rows="2" placeholder="e.g. Robotics club, 16-bit retro RPGs, pickup basketball..." style="width:100%;resize:vertical;"></textarea>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;padding-top:0.85rem;border-top:1px solid var(--border-color);">
+          <button type="button" id="btn-bio-delete-permanent" class="btn" style="color:var(--accent-rose);border-color:rgba(244,63,94,0.4);">
+            🗑️ Permanently Delete Profile
+          </button>
+          <div style="display:flex;gap:0.5rem;">
+            <button type="submit" class="btn btn-emerald" style="font-weight:800;">
+              💾 Save Student Bio
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
 
   <div id="toast" class="toast-notification">Saved changes!</div>
 

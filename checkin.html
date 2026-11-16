@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="styles.css" />
   <style>
     .mobile-shell {
-      max-width: 540px;
-      margin: 1.25rem auto 3rem;
+      max-width: 580px;
+      margin: 1.2rem auto 3rem;
       padding: 0 1rem;
     }
     .mobile-header-card {
@@ -36,7 +36,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 0.5rem;
-      margin-bottom: 1.1rem;
+      margin-bottom: 1rem;
       background: var(--bg-card);
       padding: 0.35rem;
       border-radius: var(--radius-md);
@@ -82,7 +82,7 @@
     <div class="mobile-header-card">
       <span class="brand-badge" id="m-mode-badge">MATH 319 &bull; GAMIFIED STUDENT PORTAL</span>
       <h1 id="m-page-title">University Math Lab</h1>
-      <p id="m-page-subtitle">Enter only your name — your Student Profile handles the rest!</p>
+      <p id="m-page-subtitle">Enter only your name — click any student name to view/edit their 16-Bit Bio!</p>
       <div style="margin-top:0.65rem;">
         <a href="index.html" class="btn" style="text-decoration:none;font-size:0.74rem;padding:0.28rem 0.65rem;">
           &larr; Back to Full Analytics Dashboard
@@ -90,10 +90,21 @@
       </div>
     </div>
 
+    <!-- IDEA #1: 2x DOUBLE XP QUIET-HOUR FORECAST BAR -->
+    <div class="card" style="padding:0.95rem 1.05rem;margin-bottom:1rem;border-color:rgba(16,185,129,0.45);">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.5rem;">
+        <div style="font-size:0.8rem;font-weight:800;color:var(--text-primary);">
+          ⚡ Live Lab Busyness &amp; 2x Quiet-Hour Bonus
+        </div>
+        <span class="badge badge-emerald" id="m-active-hr-badge" style="font-size:0.66rem;">9:00 AM (+100 XP 2x!)</span>
+      </div>
+      <div class="busyness-bar-grid" id="m-busyness-grid" style="grid-template-columns:repeat(4,1fr);"></div>
+    </div>
+
     <!-- Mode Switcher (Auto-selected based on QR #1 ?mode=in or QR #2 ?mode=out) -->
     <div class="mode-switch-bar" role="tablist">
       <button type="button" class="mode-btn active-in" id="btn-mode-in">
-        ✅ QR #1: Check In (+50 XP)
+        ✅ QR #1: Check In
       </button>
       <button type="button" class="mode-btn" id="btn-mode-out">
         👋 QR #2: Check Out (+100 XP)
@@ -128,7 +139,7 @@
 
           <div style="margin-bottom:0.75rem;">
             <div style="font-size:0.73rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.35rem;">
-              ⚡ Or Tap Your Student Profile Name:
+              ⚡ Tap a Student Chip to Select (Click Name in Card Below for Bio!):
             </div>
             <div id="m-quick-profile-chips" style="display:flex;flex-wrap:wrap;gap:0.35rem;"></div>
           </div>
@@ -136,8 +147,8 @@
           <!-- Gamified Student Profile Preview Card -->
           <div id="m-profile-preview" style="margin-bottom:0.85rem;padding:0.85rem;border-radius:10px;background:var(--bg-card);border:1px solid var(--border-color);"></div>
 
-          <button type="submit" class="btn btn-emerald" style="width:100%;justify-content:center;min-height:52px;font-size:1.02rem;font-weight:800;">
-            ✅ Check In Now (+50 XP &amp; 🔥 Streak)
+          <button type="submit" id="m-submit-checkin-btn" class="btn btn-emerald" style="width:100%;justify-content:center;min-height:52px;font-size:1.02rem;font-weight:800;">
+            ✅ Check In Now (+100 XP ⚡ 2x Quiet Bonus!)
           </button>
         </fieldset>
       </form>
@@ -148,7 +159,7 @@
       <div class="card-header">
         <div class="card-title-group">
           <h2>Leaving? Tap Your Name to Check Out (+100 XP)</h2>
-          <p>Tap <strong>👋 Check Out</strong> next to your name to claim your session XP and update your study streak!</p>
+          <p>Click any student's name to view their <strong>16-Bit Bio</strong>, or tap <strong>👋 Check Out</strong> to claim +100 XP!</p>
         </div>
       </div>
       <div class="kiosk-form-group" style="margin-bottom:0.85rem;">
@@ -159,6 +170,69 @@
     </div>
   </main>
 
+  <!-- ON-SCREEN STUDENT BIO POP-UP MODAL (<dialog closedby="any">) -->
+  <dialog id="m-bio-dialog" class="bio-modal" closedby="any" aria-labelledby="m-bio-dialog-title">
+    <div class="bio-modal-inner">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;padding-bottom:0.85rem;border-bottom:1px solid var(--border-color);">
+        <div style="display:flex;align-items:center;gap:0.9rem;">
+          <div id="m-bio-avatar-preview"></div>
+          <div>
+            <span class="badge badge-blue" id="m-bio-level-badge">Level 1</span>
+            <h2 id="m-bio-dialog-title" style="font-size:1.25rem;font-weight:800;margin:0.25rem 0 0.1rem;">Student Bio</h2>
+            <div id="m-bio-subtitle" style="font-size:0.78rem;color:var(--text-secondary);"></div>
+          </div>
+        </div>
+        <form method="dialog">
+          <button type="submit" class="btn" value="close" style="padding:0.28rem 0.6rem;">✕ Close</button>
+        </form>
+      </div>
+
+      <form id="m-bio-form" action="checkin.html" method="POST">
+        <input type="hidden" id="m-bio-idx" value="-1" />
+        <div style="margin-bottom:0.9rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.4rem;">
+            <label style="font-size:0.78rem;font-weight:700;color:var(--text-secondary);">🕹️ 16-Bit Cartoon Avatar:</label>
+            <label class="btn" style="cursor:pointer;font-size:0.72rem;padding:0.2rem 0.55rem;">
+              📷 Upload Image
+              <input type="file" id="m-bio-custom-file" accept="image/*" style="display:none;" />
+            </label>
+          </div>
+          <div class="avatar-picker-grid" id="m-bio-avatar-grid"></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;margin-bottom:0.65rem;">
+          <div>
+            <label for="m-bio-first" style="display:block;font-size:0.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.2rem;">First Name *</label>
+            <input type="text" id="m-bio-first" class="text-input" required style="width:100%;font-weight:700;" />
+          </div>
+          <div>
+            <label for="m-bio-last" style="display:block;font-size:0.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.2rem;">Last Name *</label>
+            <input type="text" id="m-bio-last" class="text-input" required style="width:100%;font-weight:700;" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:0.65rem;">
+          <label for="m-bio-major" style="display:block;font-size:0.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.2rem;">Major</label>
+          <input type="text" id="m-bio-major" class="text-input" style="width:100%;" />
+        </div>
+
+        <div style="margin-bottom:0.9rem;">
+          <label for="m-bio-hobbies" style="display:block;font-size:0.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.2rem;">Hobbies</label>
+          <textarea id="m-bio-hobbies" class="text-input" rows="2" style="width:100%;"></textarea>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;padding-top:0.75rem;border-top:1px solid var(--border-color);">
+          <button type="button" id="m-bio-delete-btn" class="btn" style="color:var(--accent-rose);border-color:rgba(244,63,94,0.4);">
+            🗑️ Delete Profile Permanently
+          </button>
+          <button type="submit" class="btn btn-emerald" style="font-weight:800;">
+            💾 Save Bio
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <div id="toast" class="toast-notification">Checked in!</div>
 
   <script src="data.js"></script>
@@ -166,6 +240,9 @@
     (function () {
       const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
       const LAST_STUDENT_KEY = "MATH319_REMEMBERED_STUDENT_NAME";
+      let selectedHour = "09:00";
+      let editAvatarId = "pixel-wizard";
+      let editCustomUrl = null;
 
       function getLevelInfo(xp) {
         const val = Number(xp) || 0;
@@ -183,9 +260,17 @@
             const parsed = JSON.parse(raw);
             if (parsed && parsed.tutors && parsed.hourlyArrivals) {
               if (!Array.isArray(parsed.attendanceLog)) parsed.attendanceLog = JSON.parse(JSON.stringify(def.attendanceLog || []));
-              if (!Array.isArray(parsed.studentProfiles) || parsed.studentProfiles.length === 0) {
-                parsed.studentProfiles = JSON.parse(JSON.stringify(def.studentProfiles || []));
-              }
+              if (!Array.isArray(parsed.studentProfiles)) parsed.studentProfiles = JSON.parse(JSON.stringify(def.studentProfiles || []));
+              parsed.studentProfiles.forEach((p, i) => {
+                const dp = (def.studentProfiles || []).find(x => x.name.toLowerCase() === (p.name || "").toLowerCase());
+                const parts = (p.name || "Student").split(/\s+/);
+                if (!p.firstName) p.firstName = (dp && dp.firstName) || parts[0];
+                if (!p.lastName) p.lastName = (dp && dp.lastName) || parts.slice(1).join(" ");
+                p.name = `${p.firstName} ${p.lastName}`.trim();
+                if (!p.major) p.major = (dp && dp.major) || "Mathematics / STEM";
+                if (!p.hobbies) p.hobbies = (dp && dp.hobbies) || "Retro gaming, campus clubs";
+                if (!p.avatarId) p.avatarId = (dp && dp.avatarId) || "pixel-wizard";
+              });
               return parsed;
             }
           }
@@ -211,52 +296,64 @@
       const form = document.getElementById("mobile-checkin-form");
       const searchOutInput = document.getElementById("m-checkout-search");
 
-      const btnModeIn = document.getElementById("btn-mode-in");
-      const btnModeOut = document.getElementById("btn-mode-out");
-      const cardIn = document.getElementById("card-mode-in");
-      const cardOut = document.getElementById("card-mode-out");
-      const pageTitle = document.getElementById("m-page-title");
-      const pageSub = document.getElementById("m-page-subtitle");
-      const modeBadge = document.getElementById("m-mode-badge");
-
-      function setMode(mode) {
-        if (mode === "out") {
-          cardIn.style.display = "none";
-          cardOut.style.display = "block";
-          btnModeIn.className = "mode-btn";
-          btnModeOut.className = "mode-btn active-out";
-          pageTitle.textContent = "Math Lab Student Check-Out";
-          pageSub.textContent = "Scan #2 (Exit) • Tap your name below to claim +100 XP!";
-          modeBadge.textContent = "QR #2 • EXIT CHECK-OUT";
-          renderActiveList();
-        } else {
-          cardIn.style.display = "block";
-          cardOut.style.display = "none";
-          btnModeIn.className = "mode-btn active-in";
-          btnModeOut.className = "mode-btn";
-          pageTitle.textContent = "Math Lab Student Check-In";
-          pageSub.textContent = "Scan #1 (Entrance) • Enter only your name — your profile does the rest!";
-          modeBadge.textContent = "QR #1 • ENTRANCE CHECK-IN";
-          renderProfileSupport();
-        }
+      function isQuietHour(hr) {
+        const slot = (state.hourlyArrivals && state.hourlyArrivals.Monday && state.hourlyArrivals.Monday[hr]) || {};
+        const total = (Number(slot.alg) || 0) + (Number(slot.trig) || 0) + (Number(slot.pre) || 0) + (Number(slot.calc) || 0) + (Number(slot.stats) || 0);
+        return total <= 10;
       }
 
-      btnModeIn.addEventListener("click", () => setMode("in"));
-      btnModeOut.addEventListener("click", () => setMode("out"));
+      function renderBusynessBar() {
+        const grid = document.getElementById("m-busyness-grid");
+        const badge = document.getElementById("m-active-hr-badge");
+        const submitBtn = document.getElementById("m-submit-checkin-btn");
+        const quietNow = isQuietHour(selectedHour);
+        const hrObj = state.meta.operatingHours.find(h => h.id === selectedHour) || { label: selectedHour };
+
+        if (badge) {
+          badge.className = quietNow ? "badge badge-emerald" : "badge badge-blue";
+          badge.textContent = quietNow ? `${hrObj.label} (⚡ 2x Bonus: +100 XP!)` : `${hrObj.label} (+50 XP)`;
+        }
+        if (submitBtn) {
+          submitBtn.textContent = quietNow
+            ? `✅ Check In Now (+100 XP ⚡ 2x Quiet Bonus!)`
+            : `✅ Check In Now (+50 XP & 🔥 Streak)`;
+        }
+        if (grid) {
+          grid.innerHTML = state.meta.operatingHours.map(h => {
+            const slot = (state.hourlyArrivals.Monday && state.hourlyArrivals.Monday[h.id]) || {};
+            const tot = (Number(slot.alg) || 0) + (Number(slot.trig) || 0) + (Number(slot.pre) || 0) + (Number(slot.calc) || 0) + (Number(slot.stats) || 0);
+            const q = tot <= 10;
+            return `
+              <button type="button" class="busyness-slot ${q ? 'quiet-bonus' : ''} ${h.id === selectedHour ? 'selected-hour' : ''}" data-hr="${h.id}">
+                <div style="font-weight:800;font-size:0.74rem;">${h.short.toUpperCase()}</div>
+                <div style="font-size:0.66rem;">${q ? '🟢 2x XP' : '🔴 Rush'}</div>
+              </button>
+            `;
+          }).join("");
+          grid.querySelectorAll(".busyness-slot").forEach(b => {
+            b.addEventListener("click", e => {
+              selectedHour = e.currentTarget.getAttribute("data-hr");
+              renderBusynessBar();
+              renderProfilePreview(nameInput.value);
+            });
+          });
+        }
+      }
 
       function findOrCreateProfile(rawName, saveIfNew) {
         const clean = (rawName || "").trim();
         if (!clean) return null;
         const existing = (state.studentProfiles || []).find(p => p.name.toLowerCase() === clean.toLowerCase());
         if (existing) return existing;
-
-        const firstClass = (state.classSchedule && state.classSchedule[0]) || {
-          code: "MATH 112-01",
-          subject: "trig",
-          lecturers: ["Prof. Ross"]
-        };
+        const parts = clean.split(/\s+/);
+        const firstClass = (state.classSchedule && state.classSchedule[0]) || { code: "MATH 112-01", subject: "trig", lecturers: ["Prof. Ross"] };
         const newProf = {
           name: clean,
+          firstName: parts[0] || "Student",
+          lastName: parts.slice(1).join(" ") || "",
+          major: "Mathematics / STEM",
+          hobbies: "Study groups, 16-bit retro games",
+          avatarId: "pixel-wizard",
           courseCode: firstClass.code || "MATH 112-01",
           subject: firstClass.subject || "trig",
           lecturer: Array.isArray(firstClass.lecturers) ? firstClass.lecturers.join(", ") : "Prof. Ross",
@@ -266,63 +363,172 @@
           totalMinutes: 20,
           badges: ["🌱 New Explorer"]
         };
-        if (saveIfNew) {
-          state.studentProfiles.unshift(newProf);
-        }
+        if (saveIfNew) state.studentProfiles.unshift(newProf);
         return newProf;
       }
+
+      // Bio Modal logic
+      const bioDialog = document.getElementById("m-bio-dialog");
+      if (bioDialog && !("closedBy" in HTMLDialogElement.prototype)) {
+        bioDialog.addEventListener("click", (event) => {
+          if (event.target !== bioDialog) return;
+          const rect = bioDialog.getBoundingClientRect();
+          const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
+          if (!inside) bioDialog.close();
+        });
+      }
+
+      function openBioModal(nameStr) {
+        state = loadState();
+        const clean = (nameStr || "").trim().toLowerCase();
+        let idx = (state.studentProfiles || []).findIndex(p => p.name.toLowerCase() === clean);
+        if (idx === -1 && clean) {
+          findOrCreateProfile(nameStr, true);
+          idx = 0;
+        }
+        const prof = state.studentProfiles[idx];
+        if (!prof || !bioDialog) return;
+
+        document.getElementById("m-bio-idx").value = String(idx);
+        document.getElementById("m-bio-first").value = prof.firstName || "";
+        document.getElementById("m-bio-last").value = prof.lastName || "";
+        document.getElementById("m-bio-major").value = prof.major || "";
+        document.getElementById("m-bio-hobbies").value = prof.hobbies || "";
+        editAvatarId = prof.avatarId || "pixel-wizard";
+        editCustomUrl = prof.customAvatarDataUrl || null;
+
+        const lvl = getLevelInfo(prof.xp);
+        document.getElementById("m-bio-level-badge").textContent = `${lvl.title} (${prof.xp} XP)`;
+        document.getElementById("m-bio-dialog-title").textContent = prof.name;
+        document.getElementById("m-bio-subtitle").textContent = `${prof.courseCode} • ${prof.lecturer} • 🔥 ${prof.streak} Streak`;
+
+        function refreshAvatars() {
+          document.getElementById("m-bio-avatar-preview").innerHTML = window.renderStudentAvatar({
+            name: prof.name,
+            avatarId: editAvatarId,
+            customAvatarDataUrl: editCustomUrl
+          }, 64);
+          const grid = document.getElementById("m-bio-avatar-grid");
+          grid.innerHTML = (window.PIXEL_AVATARS_16BIT || []).map(av => `
+            <button type="button" class="avatar-option-btn ${!editCustomUrl && av.id === editAvatarId ? 'selected' : ''}" data-id="${av.id}">
+              ${window.renderStudentAvatar(av.id, 38)}
+              <span>${av.label}</span>
+            </button>
+          `).join("");
+          grid.querySelectorAll(".avatar-option-btn").forEach(b => {
+            b.addEventListener("click", e => {
+              editAvatarId = e.currentTarget.getAttribute("data-id");
+              editCustomUrl = null;
+              refreshAvatars();
+            });
+          });
+        }
+        refreshAvatars();
+        bioDialog._refresh = refreshAvatars;
+        bioDialog.showModal();
+      }
+
+      document.getElementById("m-bio-custom-file").addEventListener("change", e => {
+        const f = e.target.files && e.target.files[0];
+        if (!f) return;
+        const r = new FileReader();
+        r.onload = ev => {
+          editCustomUrl = ev.target.result;
+          if (bioDialog._refresh) bioDialog._refresh();
+        };
+        r.readAsDataURL(f);
+      });
+
+      document.getElementById("m-bio-form").addEventListener("submit", e => {
+        e.preventDefault();
+        const idx = Number(document.getElementById("m-bio-idx").value);
+        const prof = state.studentProfiles[idx];
+        if (!prof) return;
+        const fName = (document.getElementById("m-bio-first").value || "").trim() || "Student";
+        const lName = (document.getElementById("m-bio-last").value || "").trim();
+        prof.firstName = fName;
+        prof.lastName = lName;
+        prof.name = `${fName} ${lName}`.trim();
+        prof.major = (document.getElementById("m-bio-major").value || "").trim();
+        prof.hobbies = (document.getElementById("m-bio-hobbies").value || "").trim();
+        prof.avatarId = editAvatarId;
+        if (editCustomUrl) prof.customAvatarDataUrl = editCustomUrl;
+        else delete prof.customAvatarDataUrl;
+
+        nameInput.value = prof.name;
+        bioDialog.close();
+        saveState(state, `💾 Saved Bio for ${prof.name}!`);
+        renderProfileSupport();
+        renderActiveList();
+      });
+
+      document.getElementById("m-bio-delete-btn").addEventListener("click", () => {
+        const idx = Number(document.getElementById("m-bio-idx").value);
+        if (idx >= 0 && state.studentProfiles[idx]) {
+          const removed = state.studentProfiles.splice(idx, 1)[0];
+          const targetLower = removed.name.toLowerCase();
+          state.attendanceLog = (state.attendanceLog || []).filter(r => (r.studentName || "").toLowerCase() !== targetLower);
+          if (nameInput.value.trim().toLowerCase() === targetLower) nameInput.value = "";
+          bioDialog.close();
+          saveState(state, `🗑️ Permanently deleted profile: ${removed.name}`);
+          renderProfileSupport();
+          renderActiveList();
+        }
+      });
 
       function renderProfilePreview(nameVal) {
         const previewEl = document.getElementById("m-profile-preview");
         if (!previewEl) return;
         const clean = (nameVal || "").trim();
         if (!clean) {
-          previewEl.innerHTML = `
-            <div style="font-size:0.8rem;color:var(--text-secondary);text-align:center;">
-              👆 Type or tap your name above to load your <strong>Gamified Student Profile</strong> (Course, Lecturer, Level &amp; 🔥 Streak)!
-            </div>
-          `;
+          previewEl.innerHTML = `<div style="font-size:0.8rem;color:var(--text-secondary);text-align:center;">👆 Tap or type your name above to load your <strong>16-Bit Bio &amp; Profile</strong>!</div>`;
           return;
         }
         const prof = findOrCreateProfile(clean, false);
-        const isExisting = (state.studentProfiles || []).some(p => p.name.toLowerCase() === clean.toLowerCase());
         const lvl = getLevelInfo(prof.xp);
-        const subObj = (state.subjects || []).find(s => s.id === prof.subject) || { name: "Trigonometry", color: "#f59e0b" };
-        const badgesHtml = (prof.badges || []).map(b => `<span class="badge badge-amber" style="font-size:0.66rem;margin-right:0.25rem;">${b}</span>`).join("");
-
+        const xpGain = isQuietHour(selectedHour) ? 100 : 50;
         previewEl.innerHTML = `
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
-            <div>
-              <div style="font-weight:800;font-size:0.98rem;color:var(--text-primary);">
-                ${prof.name} ${isExisting ? '<span class="badge badge-emerald" style="font-size:0.65rem;margin-left:0.3rem;">Verified Profile</span>' : '<span class="badge badge-blue" style="font-size:0.65rem;margin-left:0.3rem;">New Profile Auto-Created</span>'}
-              </div>
-              <div style="font-size:0.77rem;color:var(--text-secondary);margin-top:0.15rem;">
-                Auto-Linked: <strong>${prof.courseCode}</strong> &bull; 👨‍🏫 ${prof.lecturer} &bull; <span class="subject-pill" style="background:${subObj.color}">${subObj.name}</span>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:0.65rem;">
+              ${window.renderStudentAvatar(prof, 48)}
+              <div>
+                <button type="button" class="student-bio-trigger" id="m-preview-open-bio" style="font-size:0.96rem;">
+                  <span>${prof.name}</span>
+                  <span class="badge badge-blue" style="font-size:0.62rem;">🪪 View Bio</span>
+                </button>
+                <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.12rem;">
+                  🎓 <strong>${prof.major}</strong> &bull; <em>${prof.hobbies}</em>
+                </div>
+                <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:0.1rem;">
+                  📚 <strong>${prof.courseCode}</strong> (${prof.lecturer})
+                </div>
               </div>
             </div>
             <div style="text-align:right;">
-              <div style="font-weight:800;font-size:0.82rem;color:var(--accent-primary);">${lvl.title} (Lvl ${lvl.level})</div>
-              <div style="font-size:0.74rem;color:var(--accent-amber);font-weight:700;">🔥 ${prof.streak}-Visit Streak &bull; ${prof.xp} XP</div>
+              <div style="font-weight:800;font-size:0.8rem;color:var(--accent-primary);">${lvl.title}</div>
+              <div style="font-size:0.73rem;color:var(--accent-amber);font-weight:700;">🔥 ${prof.streak} Streak &bull; ${prof.xp} XP</div>
+              <div style="font-size:0.7rem;color:var(--accent-emerald);font-weight:800;">Scan: +${xpGain} XP</div>
             </div>
           </div>
-          <div class="xp-bar-track">
-            <div class="xp-bar-fill" style="width:${lvl.pct}%;"></div>
-          </div>
-          <div style="margin-top:0.45rem;">${badgesHtml}</div>
+          <div class="xp-bar-track"><div class="xp-bar-fill" style="width:${lvl.pct}%;"></div></div>
         `;
+        const trig = document.getElementById("m-preview-open-bio");
+        if (trig) trig.addEventListener("click", () => openBioModal(prof.name));
       }
 
       function renderProfileSupport() {
         state = loadState();
+        renderBusynessBar();
         const dl = document.getElementById("m-profile-datalist");
         if (dl) {
-          dl.innerHTML = (state.studentProfiles || []).map(p => `<option value="${p.name}">${p.courseCode} (${p.lecturer}) — Lvl ${getLevelInfo(p.xp).level}</option>`).join("");
+          dl.innerHTML = (state.studentProfiles || []).map(p => `<option value="${p.name}">${p.major} • ${p.courseCode}</option>`).join("");
         }
         const chipsWrap = document.getElementById("m-quick-profile-chips");
         if (chipsWrap) {
           chipsWrap.innerHTML = (state.studentProfiles || []).map(p => `
-            <button type="button" class="tutor-chip m-chip-select-student" data-name="${p.name.replace(/"/g, '&quot;')}" style="font-size:0.75rem;padding:0.25rem 0.6rem;">
-              <span>🔥 ${p.name}</span>
+            <button type="button" class="tutor-chip m-chip-select-student" data-name="${p.name.replace(/"/g, '&quot;')}" style="font-size:0.75rem;padding:0.22rem 0.55rem;display:inline-flex;align-items:center;gap:0.35rem;">
+              ${window.renderStudentAvatar(p, 20)}
+              <span>${p.name}</span>
             </button>
           `).join("");
 
@@ -334,10 +540,6 @@
               renderProfilePreview(chosen);
             });
           });
-        }
-        const remembered = localStorage.getItem(LAST_STUDENT_KEY);
-        if (remembered && !nameInput.value) {
-          nameInput.value = remembered;
         }
         renderProfilePreview(nameInput.value);
       }
@@ -362,19 +564,27 @@
         }
         wrap.innerHTML = active.map(r => {
           const prof = findOrCreateProfile(r.studentName, false);
-          const lvl = getLevelInfo(prof ? prof.xp : 150);
           return `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.8rem;border:1px solid var(--border-color);border-radius:10px;margin-bottom:0.55rem;background:var(--bg-subtle);">
-              <div>
-                <div style="font-weight:800;font-size:0.95rem;">${r.studentName} <span style="font-size:0.73rem;color:var(--accent-amber);">🔥 ${prof ? prof.streak : 1} streak</span></div>
-                <div style="font-size:0.75rem;color:var(--text-secondary);">${r.courseCode} (${r.lecturer}) &bull; In at ${r.checkInTime} &bull; ${lvl.title}</div>
+              <div style="display:flex;align-items:center;gap:0.6rem;">
+                ${window.renderStudentAvatar(prof, 38)}
+                <div>
+                  <button type="button" class="student-bio-trigger m-active-bio-btn" data-name="${r.studentName.replace(/"/g, '&quot;')}">
+                    <span>${r.studentName}</span>
+                  </button>
+                  <div style="font-size:0.74rem;color:var(--text-secondary);">${r.courseCode} (${r.lecturer}) &bull; In at ${r.checkInTime}</div>
+                </div>
               </div>
-              <button type="button" class="btn btn-primary m-btn-checkout" data-id="${r.id}" style="min-height:46px;padding:0.45rem 0.85rem;font-weight:800;">
+              <button type="button" class="btn btn-primary m-btn-checkout" data-id="${r.id}" style="min-height:44px;padding:0.4rem 0.8rem;font-weight:800;">
                 👋 Check Out (+100 XP)
               </button>
             </div>
           `;
         }).join("");
+
+        wrap.querySelectorAll(".m-active-bio-btn").forEach(b => {
+          b.addEventListener("click", e => openBioModal(e.currentTarget.getAttribute("data-name")));
+        });
 
         wrap.querySelectorAll(".m-btn-checkout").forEach(btn => {
           btn.addEventListener("click", e => {
@@ -386,25 +596,42 @@
               rec.durationMinutes = mins;
               rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
               rec.xpEarned = (rec.xpEarned || 50) + 100;
-
               const prof = findOrCreateProfile(rec.studentName, true);
               if (prof) {
                 prof.xp = (Number(prof.xp) || 0) + 100;
                 prof.totalMinutes = (Number(prof.totalMinutes) || 0) + mins;
-                if (prof.totalMinutes >= 100 && !(prof.badges || []).includes("⏱️ 100+ Min Club")) {
-                  prof.badges.push("⏱️ 100+ Min Club");
-                }
               }
-              saveState(state, `🎉 Checked out ${rec.studentName}! +100 XP earned (${prof ? prof.xp : 200} total XP)!`);
+              saveState(state, `🎉 Checked out ${rec.studentName}! +100 XP earned!`);
               renderActiveList();
             }
           });
         });
       }
 
-      if (searchOutInput) {
-        searchOutInput.addEventListener("input", renderActiveList);
+      if (searchOutInput) searchOutInput.addEventListener("input", renderActiveList);
+
+      const btnModeIn = document.getElementById("btn-mode-in");
+      const btnModeOut = document.getElementById("btn-mode-out");
+      const cardIn = document.getElementById("card-mode-in");
+      const cardOut = document.getElementById("card-mode-out");
+
+      function setMode(mode) {
+        if (mode === "out") {
+          cardIn.style.display = "none";
+          cardOut.style.display = "block";
+          btnModeIn.className = "mode-btn";
+          btnModeOut.className = "mode-btn active-out";
+          renderActiveList();
+        } else {
+          cardIn.style.display = "block";
+          cardOut.style.display = "none";
+          btnModeIn.className = "mode-btn active-in";
+          btnModeOut.className = "mode-btn";
+          renderProfileSupport();
+        }
       }
+      btnModeIn.addEventListener("click", () => setMode("in"));
+      btnModeOut.addEventListener("click", () => setMode("out"));
 
       form.addEventListener("submit", e => {
         e.preventDefault();
@@ -416,21 +643,21 @@
         }
         state = loadState();
         const prof = findOrCreateProfile(rawName, true);
-        prof.xp = (Number(prof.xp) || 0) + 50;
+        const quietBonus = isQuietHour(selectedHour);
+        const xpGain = quietBonus ? 100 : 50;
+        prof.xp = (Number(prof.xp) || 0) + xpGain;
         prof.streak = (Number(prof.streak) || 0) + 1;
         prof.visits = (Number(prof.visits) || 0) + 1;
-        if (prof.streak >= 3 && !(prof.badges || []).some(b => b.includes("Streak"))) {
-          prof.badges.push(`🔥 ${prof.streak}-Day Streak`);
+        if (quietBonus && !(prof.badges || []).includes("⚡ 2x Quiet-Hour Strategist")) {
+          prof.badges.push("⚡ 2x Quiet-Hour Strategist");
         }
 
-        // Determine release hour from student's course section in classSchedule
-        const matchedCourse = (state.classSchedule || []).find(c => c.code === prof.courseCode);
         const day = "Monday";
-        const hr = (matchedCourse && matchedCourse.releaseHour) ? matchedCourse.releaseHour : "10:00";
+        const hr = selectedHour || "09:00";
         const sub = prof.subject || "trig";
         const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        const newRec = {
+        state.attendanceLog.unshift({
           id: "chk-" + Date.now(),
           studentName: prof.name,
           courseCode: prof.courseCode,
@@ -441,30 +668,20 @@
           checkInTime: nowStr,
           checkOutTime: null,
           durationMinutes: 20,
-          xpEarned: 50,
+          xpEarned: xpGain,
           status: "active"
-        };
+        });
 
-        state.attendanceLog.unshift(newRec);
         if (state.hourlyArrivals[day] && state.hourlyArrivals[day][hr]) {
           state.hourlyArrivals[day][hr][sub] = (Number(state.hourlyArrivals[day][hr][sub]) || 0) + 1;
         }
-
-        try {
-          localStorage.setItem(LAST_STUDENT_KEY, prof.name);
-        } catch (err) {}
-
-        saveState(state, `🎉 Welcome ${prof.name}! +50 XP & 🔥 ${prof.streak}-Visit Streak (${prof.courseCode})!`);
+        saveState(state, `🎉 Checked in ${prof.name}! +${xpGain} XP ${quietBonus ? "(⚡ 2x Quiet Bonus!)" : ""}!`);
         renderProfileSupport();
-        renderActiveList();
       });
 
       const params = new URLSearchParams(window.location.search);
-      if (params.get("mode") === "out") {
-        setMode("out");
-      } else {
-        setMode("in");
-      }
+      if (params.get("mode") === "out") setMode("out");
+      else setMode("in");
     })();
   </script>
 </body>

@@ -417,12 +417,17 @@ window.MATH_LAB_DEFAULT_DATA = {
 
   // --------------------------------------------------------------------------
   // 8. GAMIFIED STUDENT PROFILES (Enables 1-Step "Name Only" QR Check-In)
-  //    Each student's profile stores their enrolled Course Section, Subject,
-  //    and Lecturer so they ONLY type/tap their Name when scanning the QR code!
+  //    Each student's profile stores their First Name, Last Name, Major, Hobbies,
+  //    16-Bit Cartoon Avatar, Course Section, Subject, and Lecturer!
   // --------------------------------------------------------------------------
   studentProfiles: [
     {
       name: "Jordan Miles",
+      firstName: "Jordan",
+      lastName: "Miles",
+      major: "Mechanical Engineering",
+      hobbies: "Robotics club, 16-bit retro RPGs, 3D printing, pickup basketball",
+      avatarId: "pixel-wizard",
       courseCode: "MATH 112-01",
       subject: "trig",
       lecturer: "Prof. Ross",
@@ -434,6 +439,11 @@ window.MATH_LAB_DEFAULT_DATA = {
     },
     {
       name: "Amina Bello",
+      firstName: "Amina",
+      lastName: "Bello",
+      major: "Computer Science",
+      hobbies: "Hackathons, indie game design, matcha lattes, chess club",
+      avatarId: "pixel-coder",
       courseCode: "MATH 112-01",
       subject: "trig",
       lecturer: "Prof. Ross",
@@ -445,6 +455,11 @@ window.MATH_LAB_DEFAULT_DATA = {
     },
     {
       name: "Devon Brooks",
+      firstName: "Devon",
+      lastName: "Brooks",
+      major: "Architecture & Urban Design",
+      hobbies: "Digital sketching, lo-fi beats production, skateboarding",
+      avatarId: "pixel-knight",
       courseCode: "MATH 111-01/02",
       subject: "alg",
       lecturer: "Prof. Reynolds",
@@ -456,6 +471,11 @@ window.MATH_LAB_DEFAULT_DATA = {
     },
     {
       name: "Chloe Nguyen",
+      firstName: "Chloe",
+      lastName: "Nguyen",
+      major: "Aerospace Engineering",
+      hobbies: "Model rocketry, stargazing, badminton, sci-fi novels",
+      avatarId: "pixel-astro",
       courseCode: "MATH 112-02",
       subject: "trig",
       lecturer: "Dr. Carter",
@@ -463,10 +483,15 @@ window.MATH_LAB_DEFAULT_DATA = {
       streak: 7,
       visits: 8,
       totalMinutes: 156,
-      badges: ["👑 Lab Legend", "🔥 7-Day Streak", "⏱️ 100+ Min Club"]
+      badges: ["👑 Lab Legend", "🔥 7-Day Streak", "⏱️ 100+ Min Club", "⚡ 2x Quiet-Hour Strategist"]
     },
     {
       name: "Marcus Vance",
+      firstName: "Marcus",
+      lastName: "Vance",
+      major: "Biochemistry (Pre-Med)",
+      hobbies: "Campus EMS volunteer, acoustic guitar, marathon running",
+      avatarId: "pixel-cat",
       courseCode: "MATH 115-01/02",
       subject: "pre",
       lecturer: "Prof. Alvarez",
@@ -478,6 +503,11 @@ window.MATH_LAB_DEFAULT_DATA = {
     },
     {
       name: "Sofia Patel",
+      firstName: "Sofia",
+      lastName: "Patel",
+      major: "Applied Mathematics & Data Science",
+      hobbies: "Putnam math team, speedcubing, baking sourdough, tennis",
+      avatarId: "pixel-hero",
       courseCode: "MATH 161-01",
       subject: "calc",
       lecturer: "Prof. Ross",
@@ -489,6 +519,11 @@ window.MATH_LAB_DEFAULT_DATA = {
     },
     {
       name: "Liam O'Connor",
+      firstName: "Liam",
+      lastName: "O'Connor",
+      major: "Quantitative Finance & Economics",
+      hobbies: " intramural soccer, sports analytics podcast, vintage synthesizers",
+      avatarId: "pixel-ninja",
       courseCode: "MATH 200-01/02",
       subject: "stats",
       lecturer: "Dr. Patel",
@@ -496,7 +531,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       streak: 2,
       visits: 2,
       totalMinutes: 40,
-      badges: ["📊 Stats Explorer"]
+      badges: ["📊 Stats Explorer", "⚡ 2x Quiet-Hour Strategist"]
     }
   ],
 
@@ -587,3 +622,186 @@ window.MATH_LAB_DEFAULT_DATA = {
     }
   ]
 };
+
+// ============================================================================
+// 16-BIT CARTOON PIXEL-ART AVATAR COLLECTION (8 Retro RPG / Campus Characters)
+// Rendered via crisp 16x16 pixel grids (shape-rendering="crispEdges")
+// ============================================================================
+window.PIXEL_AVATARS_16BIT = [
+  {
+    id: "pixel-wizard",
+    label: "16-Bit Math Mage",
+    bg: "#1e1b4b",
+    svgBody: `
+      <rect width="16" height="16" fill="#1e1b4b"/>
+      <rect x="6" y="1" width="4" height="1" fill="#7c3aed"/>
+      <rect x="5" y="2" width="6" height="1" fill="#7c3aed"/>
+      <rect x="7" y="2" width="2" height="1" fill="#facc15"/>
+      <rect x="4" y="3" width="8" height="1" fill="#6d28d9"/>
+      <rect x="2" y="4" width="12" height="1" fill="#facc15"/>
+      <rect x="1" y="5" width="14" height="1" fill="#5b21b6"/>
+      <rect x="4" y="6" width="8" height="5" fill="#fed7aa"/>
+      <rect x="4" y="7" width="3" height="2" fill="#38bdf8"/>
+      <rect x="9" y="7" width="3" height="2" fill="#38bdf8"/>
+      <rect x="7" y="7" width="2" height="1" fill="#facc15"/>
+      <rect x="5" y="7" width="1" height="1" fill="#ffffff"/>
+      <rect x="10" y="7" width="1" height="1" fill="#ffffff"/>
+      <rect x="6" y="10" width="4" height="1" fill="#ea580c"/>
+      <rect x="3" y="11" width="10" height="5" fill="#6d28d9"/>
+      <rect x="6" y="11" width="4" height="5" fill="#facc15"/>
+      <rect x="7" y="12" width="2" height="3" fill="#4c1d95"/>
+    `
+  },
+  {
+    id: "pixel-coder",
+    label: "Cyber Hoodie Hacker",
+    bg: "#042f2e",
+    svgBody: `
+      <rect width="16" height="16" fill="#042f2e"/>
+      <rect x="4" y="2" width="8" height="2" fill="#0d9488"/>
+      <rect x="3" y="4" width="10" height="7" fill="#14b8a6"/>
+      <rect x="4" y="4" width="8" height="6" fill="#f5d0fe"/>
+      <rect x="5" y="5" width="6" height="5" fill="#fdba74"/>
+      <rect x="4" y="6" width="8" height="2" fill="#22d3ee"/>
+      <rect x="5" y="6" width="2" height="1" fill="#ffffff"/>
+      <rect x="9" y="6" width="2" height="1" fill="#ffffff"/>
+      <rect x="7" y="9" width="2" height="1" fill="#9a3412"/>
+      <rect x="2" y="6" width="1" height="3" fill="#10b981"/>
+      <rect x="13" y="6" width="1" height="3" fill="#10b981"/>
+      <rect x="2" y="11" width="12" height="5" fill="#0f766e"/>
+      <rect x="6" y="11" width="4" height="4" fill="#2dd4bf"/>
+    `
+  },
+  {
+    id: "pixel-knight",
+    label: "Paladin of Pi",
+    bg: "#1e293b",
+    svgBody: `
+      <rect width="16" height="16" fill="#1e293b"/>
+      <rect x="6" y="1" width="5" height="1" fill="#ef4444"/>
+      <rect x="7" y="2" width="5" height="1" fill="#dc2626"/>
+      <rect x="4" y="3" width="8" height="8" fill="#cbd5e1"/>
+      <rect x="5" y="4" width="6" height="2" fill="#e2e8f0"/>
+      <rect x="4" y="6" width="8" height="2" fill="#0f172a"/>
+      <rect x="5" y="6" width="2" height="1" fill="#38bdf8"/>
+      <rect x="9" y="6" width="2" height="1" fill="#38bdf8"/>
+      <rect x="7" y="8" width="2" height="3" fill="#facc15"/>
+      <rect x="3" y="11" width="10" height="5" fill="#94a3b8"/>
+      <rect x="5" y="12" width="6" height="4" fill="#ef4444"/>
+      <rect x="7" y="12" width="2" height="4" fill="#facc15"/>
+    `
+  },
+  {
+    id: "pixel-astro",
+    label: "Starlight Astronaut",
+    bg: "#090d16",
+    svgBody: `
+      <rect width="16" height="16" fill="#090d16"/>
+      <rect x="2" y="2" width="1" height="1" fill="#fde047"/>
+      <rect x="13" y="3" width="1" height="1" fill="#38bdf8"/>
+      <rect x="4" y="2" width="8" height="9" fill="#f8fafc"/>
+      <rect x="3" y="4" width="10" height="6" fill="#e2e8f0"/>
+      <rect x="4" y="4" width="8" height="5" fill="#f59e0b"/>
+      <rect x="5" y="5" width="6" height="3" fill="#fbbf24"/>
+      <rect x="5" y="5" width="2" height="1" fill="#fef08a"/>
+      <rect x="3" y="11" width="10" height="5" fill="#f8fafc"/>
+      <rect x="4" y="11" width="8" height="1" fill="#f97316"/>
+      <rect x="6" y="13" width="4" height="2" fill="#3b82f6"/>
+    `
+  },
+  {
+    id: "pixel-cat",
+    label: "Prof. Whiskers 16-Bit",
+    bg: "#31102f",
+    svgBody: `
+      <rect width="16" height="16" fill="#31102f"/>
+      <rect x="3" y="2" width="2" height="3" fill="#fb923c"/>
+      <rect x="11" y="2" width="2" height="3" fill="#fb923c"/>
+      <rect x="4" y="3" width="1" height="2" fill="#fda4af"/>
+      <rect x="11" y="3" width="1" height="2" fill="#fda4af"/>
+      <rect x="3" y="4" width="10" height="7" fill="#fb923c"/>
+      <rect x="5" y="5" width="6" height="6" fill="#ffedd5"/>
+      <rect x="4" y="6" width="3" height="2" fill="#0f172a"/>
+      <rect x="9" y="6" width="3" height="2" fill="#0f172a"/>
+      <rect x="5" y="6" width="1" height="1" fill="#ffffff"/>
+      <rect x="10" y="6" width="1" height="1" fill="#ffffff"/>
+      <rect x="7" y="8" width="2" height="1" fill="#f43f5e"/>
+      <rect x="3" y="11" width="10" height="5" fill="#1e293b"/>
+      <rect x="6" y="11" width="4" height="2" fill="#10b981"/>
+      <rect x="7" y="11" width="2" height="2" fill="#34d399"/>
+    `
+  },
+  {
+    id: "pixel-ninja",
+    label: "Shadow Calculus Ninja",
+    bg: "#172554",
+    svgBody: `
+      <rect width="16" height="16" fill="#172554"/>
+      <rect x="4" y="2" width="8" height="9" fill="#0f172a"/>
+      <rect x="3" y="4" width="10" height="2" fill="#ef4444"/>
+      <rect x="13" y="5" width="2" height="2" fill="#dc2626"/>
+      <rect x="4" y="6" width="8" height="2" fill="#fde68a"/>
+      <rect x="5" y="6" width="2" height="2" fill="#0f172a"/>
+      <rect x="9" y="6" width="2" height="2" fill="#0f172a"/>
+      <rect x="5" y="6" width="1" height="1" fill="#ffffff"/>
+      <rect x="9" y="6" width="1" height="1" fill="#ffffff"/>
+      <rect x="3" y="11" width="10" height="5" fill="#0f172a"/>
+      <rect x="5" y="11" width="6" height="5" fill="#1e293b"/>
+      <rect x="7" y="12" width="2" height="3" fill="#ef4444"/>
+    `
+  },
+  {
+    id: "pixel-robot",
+    label: "TI-84 Mecha Bot",
+    bg: "#1e1b4b",
+    svgBody: `
+      <rect width="16" height="16" fill="#1e1b4b"/>
+      <rect x="7" y="1" width="2" height="1" fill="#f43f5e"/>
+      <rect x="7" y="2" width="2" height="2" fill="#94a3b8"/>
+      <rect x="3" y="4" width="10" height="7" fill="#64748b"/>
+      <rect x="4" y="5" width="8" height="5" fill="#cbd5e1"/>
+      <rect x="5" y="6" width="2" height="2" fill="#06b6d4"/>
+      <rect x="9" y="6" width="2" height="2" fill="#06b6d4"/>
+      <rect x="5" y="9" width="6" height="1" fill="#0f172a"/>
+      <rect x="6" y="9" width="1" height="1" fill="#22c55e"/>
+      <rect x="8" y="9" width="1" height="1" fill="#22c55e"/>
+      <rect x="10" y="9" width="1" height="1" fill="#22c55e"/>
+      <rect x="3" y="11" width="10" height="5" fill="#475569"/>
+      <rect x="6" y="12" width="4" height="3" fill="#facc15"/>
+    `
+  },
+  {
+    id: "pixel-hero",
+    label: "Crowned RPG Scholar",
+    bg: "#064e3b",
+    svgBody: `
+      <rect width="16" height="16" fill="#064e3b"/>
+      <rect x="4" y="1" width="1" height="2" fill="#facc15"/>
+      <rect x="7" y="1" width="2" height="2" fill="#facc15"/>
+      <rect x="11" y="1" width="1" height="2" fill="#facc15"/>
+      <rect x="4" y="3" width="8" height="1" fill="#eab308"/>
+      <rect x="7" y="3" width="2" height="1" fill="#ef4444"/>
+      <rect x="3" y="4" width="10" height="3" fill="#78350f"/>
+      <rect x="4" y="5" width="8" height="6" fill="#fdba74"/>
+      <rect x="5" y="7" width="2" height="2" fill="#1e3a8a"/>
+      <rect x="9" y="7" width="2" height="2" fill="#1e3a8a"/>
+      <rect x="5" y="7" width="1" height="1" fill="#ffffff"/>
+      <rect x="9" y="7" width="1" height="1" fill="#ffffff"/>
+      <rect x="7" y="10" width="2" height="1" fill="#c2410c"/>
+      <rect x="3" y="11" width="10" height="5" fill="#10b981"/>
+      <rect x="6" y="11" width="4" height="5" fill="#fef08a"/>
+    `
+  }
+];
+
+window.renderStudentAvatar = function (profileOrId, sizePx) {
+  const sz = sizePx || 36;
+  const list = window.PIXEL_AVATARS_16BIT || [];
+  if (profileOrId && typeof profileOrId === "object" && profileOrId.customAvatarDataUrl) {
+    return `<img src="${profileOrId.customAvatarDataUrl}" alt="${(profileOrId.name || 'Student').replace(/"/g, '&quot;')}" width="${sz}" height="${sz}" style="width:${sz}px;height:${sz}px;border-radius:8px;object-fit:cover;border:2px solid var(--accent-primary);flex-shrink:0;image-rendering:pixelated;" />`;
+  }
+  const avatarId = (profileOrId && typeof profileOrId === "object") ? profileOrId.avatarId : profileOrId;
+  const found = list.find(a => a.id === avatarId) || list[0];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="${sz}" height="${sz}" shape-rendering="crispEdges" role="img" aria-label="${found.label}" style="width:${sz}px;height:${sz}px;border-radius:8px;border:2px solid rgba(59,130,246,0.55);flex-shrink:0;display:inline-block;vertical-align:middle;">${found.svgBody}</svg>`;
+};
+
