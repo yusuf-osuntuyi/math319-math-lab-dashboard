@@ -41,9 +41,16 @@
     });
     if (!data.qrConfig || typeof data.qrConfig !== "object") {
       data.qrConfig = clone(def.qrConfig || {
-        targetUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html",
+        checkInUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in",
+        checkOutUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out",
         autoSyncArrivals: true
       });
+    }
+    if (!data.qrConfig.checkInUrl) {
+      data.qrConfig.checkInUrl = "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in";
+    }
+    if (!data.qrConfig.checkOutUrl) {
+      data.qrConfig.checkOutUrl = "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out";
     }
     if (!Array.isArray(data.attendanceLog)) {
       data.attendanceLog = clone(def.attendanceLog || []);
@@ -1379,8 +1386,8 @@
     return Math.round(sum / completed.length);
   }
 
-  function renderQrCodeGraphic(url) {
-    const container = document.getElementById("qr-code-container");
+  function renderQrCodeToElement(containerId, url, altText) {
+    const container = document.getElementById(containerId);
     if (!container) return;
     const safeUrl = (url || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html").trim();
     if (typeof qrcode === "function") {
@@ -1391,15 +1398,15 @@
         container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
         const svgEl = container.querySelector("svg");
         if (svgEl) {
-          svgEl.setAttribute("width", "180");
-          svgEl.setAttribute("height", "180");
+          svgEl.setAttribute("width", "168");
+          svgEl.setAttribute("height", "168");
         }
         return;
       } catch (err) {
         console.warn("SVG QR fallback:", err);
       }
     }
-    container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(safeUrl)}" alt="Math Lab Check-In QR Code" width="180" height="180" />`;
+    container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=168x168&data=${encodeURIComponent(safeUrl)}" alt="${altText}" width="168" height="168" />`;
   }
 
   function renderQrTab() {
@@ -1471,12 +1478,19 @@
       `;
     }
 
-    // 2. Render QR Code Graphic & Target URL input
-    const targetUrl = (appData.qrConfig && appData.qrConfig.targetUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html";
-    renderQrCodeGraphic(targetUrl);
-    const urlInput = document.getElementById("qr-target-url-input");
-    if (urlInput && document.activeElement !== urlInput) {
-      urlInput.value = targetUrl;
+    // 2. Render Both QR Code Graphics (QR #1 Check-In & QR #2 Check-Out) & URL inputs
+    const checkInUrl = (appData.qrConfig && appData.qrConfig.checkInUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in";
+    const checkOutUrl = (appData.qrConfig && appData.qrConfig.checkOutUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out";
+    renderQrCodeToElement("qr-code-checkin-container", checkInUrl, "Math Lab Check-In QR Code");
+    renderQrCodeToElement("qr-code-checkout-container", checkOutUrl, "Math Lab Check-Out QR Code");
+
+    const inUrlInput = document.getElementById("qr-checkin-url-input");
+    if (inUrlInput && document.activeElement !== inUrlInput) {
+      inUrlInput.value = checkInUrl;
+    }
+    const outUrlInput = document.getElementById("qr-checkout-url-input");
+    if (outUrlInput && document.activeElement !== outUrlInput) {
+      outUrlInput.value = checkOutUrl;
     }
     const autoSyncChk = document.getElementById("checkin-autosync-toggle");
     if (autoSyncChk) {
@@ -2175,65 +2189,105 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
       });
     }
 
-    // Update QR Target URL
-    const btnUpdateQrUrl = document.getElementById("btn-update-qr-url");
-    if (btnUpdateQrUrl) {
-      btnUpdateQrUrl.addEventListener("click", () => {
-        const urlInp = document.getElementById("qr-target-url-input");
+    // Update QR #1 (Check-In) and QR #2 (Check-Out) Target URLs
+    const btnUpdateInUrl = document.getElementById("btn-update-qr-checkin-url");
+    if (btnUpdateInUrl) {
+      btnUpdateInUrl.addEventListener("click", () => {
+        const urlInp = document.getElementById("qr-checkin-url-input");
         if (urlInp && urlInp.value.trim()) {
-          appData.qrConfig.targetUrl = urlInp.value.trim();
-          saveState("Updated QR Code target URL!");
+          appData.qrConfig.checkInUrl = urlInp.value.trim();
+          saveState("Updated QR #1 (Check-In) link!");
           renderQrTab();
         }
       });
     }
 
-    // Print QR Door Poster button
-    const btnPrintQr = document.getElementById("btn-print-qr-poster");
-    if (btnPrintQr) {
-      btnPrintQr.addEventListener("click", () => {
-        const qrContainer = document.getElementById("qr-code-container");
-        const qrHtml = qrContainer ? qrContainer.innerHTML : "";
-        const url = (appData.qrConfig && appData.qrConfig.targetUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html";
-        const win = window.open("", "_blank", "width=620,height=760");
-        if (win) {
-          win.document.write(`
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-              <title>Math Lab QR Check-In Poster</title>
-              <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; text-align: center; padding: 2.5rem; color: #0f172a; }
-                .poster { border: 4px solid #1d4ed8; border-radius: 16px; padding: 2.5rem 2rem; max-width: 460px; margin: 0 auto; }
-                .badge { background: #dbeafe; color: #1d4ed8; font-weight: 800; padding: 0.35rem 0.9rem; border-radius: 99px; font-size: 0.85rem; display: inline-block; }
-                h1 { font-size: 1.9rem; margin: 0.8rem 0 0.4rem; }
-                p { color: #475569; font-size: 1rem; line-height: 1.5; }
-                .qr-wrap { margin: 1.5rem auto; display: inline-block; padding: 1rem; border: 2px dashed #93c5fd; border-radius: 12px; }
-                .qr-wrap svg, .qr-wrap img { width: 240px !important; height: 240px !important; }
-                .steps { text-align: left; background: #f8fafc; padding: 1rem 1.4rem; border-radius: 10px; font-size: 0.92rem; margin-top: 1rem; }
-                .url { font-family: monospace; font-size: 0.78rem; color: #64748b; margin-top: 1rem; word-break: break-all; }
-              </style>
-            </head>
-            <body>
-              <div class="poster">
-                <span class="badge">UNIVERSITY MATH LAB</span>
-                <h1>Scan to Check In &amp; Out</h1>
-                <p>Help us keep wait times under 8 minutes and staff tutors for your exact math course!</p>
-                <div class="qr-wrap">${qrHtml}</div>
-                <div class="steps">
-                  <strong>1. Arriving:</strong> Scan code, pick your Course &amp; Lecturer, and tap <strong>Check In</strong>.<br/><br/>
-                  <strong>2. Leaving:</strong> Tap <strong>Check Out</strong> next to your name when finished.
-                </div>
-                <div class="url">${url}</div>
-              </div>
-              <script>window.onload = () => window.print();<\/script>
-            </body>
-            </html>
-          `);
-          win.document.close();
+    const btnUpdateOutUrl = document.getElementById("btn-update-qr-checkout-url");
+    if (btnUpdateOutUrl) {
+      btnUpdateOutUrl.addEventListener("click", () => {
+        const urlInp = document.getElementById("qr-checkout-url-input");
+        if (urlInp && urlInp.value.trim()) {
+          appData.qrConfig.checkOutUrl = urlInp.value.trim();
+          saveState("Updated QR #2 (Check-Out) link!");
+          renderQrTab();
         }
       });
     }
+
+    function openPrintableQrPosters(mode) {
+      const inContainer = document.getElementById("qr-code-checkin-container");
+      const outContainer = document.getElementById("qr-code-checkout-container");
+      const inHtml = inContainer ? inContainer.innerHTML : "";
+      const outHtml = outContainer ? outContainer.innerHTML : "";
+      const inUrl = (appData.qrConfig && appData.qrConfig.checkInUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in";
+      const outUrl = (appData.qrConfig && appData.qrConfig.checkOutUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out";
+
+      const posterInBlock = `
+        <div class="poster poster-in">
+          <span class="badge badge-in">ENTRANCE &bull; QR CODE #1</span>
+          <h1>✅ Scan to Check In</h1>
+          <p>Arriving at the Math Lab? Scan with your phone camera, pick your Course &amp; Lecturer, and tap <strong>Check In</strong>!</p>
+          <div class="qr-wrap qr-in">${inHtml}</div>
+          <div class="url">${inUrl}</div>
+        </div>
+      `;
+      const posterOutBlock = `
+        <div class="poster poster-out">
+          <span class="badge badge-out">EXIT &bull; QR CODE #2</span>
+          <h1>👋 Scan to Check Out</h1>
+          <p>Leaving the Math Lab? Scan with your phone camera and tap <strong>Check Out</strong> next to your name!</p>
+          <div class="qr-wrap qr-out">${outHtml}</div>
+          <div class="url">${outUrl}</div>
+        </div>
+      `;
+
+      const bodyHtml = mode === "in"
+        ? posterInBlock
+        : (mode === "out" ? posterOutBlock : `<div class="grid-both">${posterInBlock}${posterOutBlock}</div>`);
+
+      const win = window.open("", "_blank", "width=900,height=760");
+      if (win) {
+        win.document.write(`
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <title>Math Lab QR Check-In &amp; Check-Out Posters</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; text-align: center; padding: 1.75rem; color: #0f172a; }
+              .grid-both { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 920px; margin: 0 auto; }
+              .poster { border-radius: 16px; padding: 2rem 1.5rem; max-width: 430px; margin: 0 auto; }
+              .poster-in { border: 4px solid #059669; }
+              .poster-out { border: 4px solid #2563eb; }
+              .badge { font-weight: 800; padding: 0.32rem 0.85rem; border-radius: 99px; font-size: 0.82rem; display: inline-block; }
+              .badge-in { background: #d1fae5; color: #047857; }
+              .badge-out { background: #dbeafe; color: #1d4ed8; }
+              h1 { font-size: 1.75rem; margin: 0.75rem 0 0.4rem; }
+              p { color: #475569; font-size: 0.95rem; line-height: 1.45; }
+              .qr-wrap { margin: 1.25rem auto; display: inline-block; padding: 0.85rem; border-radius: 12px; }
+              .qr-in { border: 2px dashed #34d399; }
+              .qr-out { border: 2px dashed #93c5fd; }
+              .qr-wrap svg, .qr-wrap img { width: 220px !important; height: 220px !important; }
+              .url { font-family: monospace; font-size: 0.72rem; color: #64748b; margin-top: 0.75rem; word-break: break-all; }
+            </style>
+          </head>
+          <body>
+            ${bodyHtml}
+            <script>window.onload = () => window.print();<\/script>
+          </body>
+          </html>
+        `);
+        win.document.close();
+      }
+    }
+
+    const btnPrintIn = document.getElementById("btn-print-qr-checkin");
+    if (btnPrintIn) btnPrintIn.addEventListener("click", () => openPrintableQrPosters("in"));
+
+    const btnPrintOut = document.getElementById("btn-print-qr-checkout");
+    if (btnPrintOut) btnPrintOut.addEventListener("click", () => openPrintableQrPosters("out"));
+
+    const btnPrintBoth = document.getElementById("btn-print-both-posters");
+    if (btnPrintBoth) btnPrintBoth.addEventListener("click", () => openPrintableQrPosters("both"));
 
     // Export QR Log to Excel & Clear Completed Log
     const btnExportQrExcel = document.getElementById("btn-export-qr-excel");

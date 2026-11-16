@@ -410,7 +410,8 @@ window.MATH_LAB_DEFAULT_DATA = {
   //    day, hour block, check-in time, check-out time, and durationMinutes (1/mu).
   // --------------------------------------------------------------------------
   qrConfig: {
-    targetUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html",
+    checkInUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in",
+    checkOutUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out",
     autoSyncArrivals: true
   },
 

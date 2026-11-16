@@ -11,46 +11,86 @@
   <style>
     .mobile-shell {
       max-width: 540px;
-      margin: 1.5rem auto 3rem;
+      margin: 1.25rem auto 3rem;
       padding: 0 1rem;
     }
     .mobile-header-card {
       background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(16, 185, 129, 0.12));
       border: 1px solid rgba(59, 130, 246, 0.4);
       border-radius: var(--radius-lg);
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
+      padding: 1.15rem;
+      margin-bottom: 1rem;
       text-align: center;
     }
     .mobile-header-card h1 {
-      font-size: 1.35rem;
+      font-size: 1.3rem;
       font-weight: 800;
       margin: 0.35rem 0 0.25rem;
     }
     .mobile-header-card p {
-      font-size: 0.84rem;
+      font-size: 0.82rem;
       color: var(--text-secondary);
       margin: 0;
+    }
+    .mode-switch-bar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      margin-bottom: 1.1rem;
+      background: var(--bg-card);
+      padding: 0.35rem;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-color);
+    }
+    .mode-btn {
+      min-height: 46px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-secondary);
+      font-weight: 700;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .mode-btn.active-in {
+      background: var(--accent-emerald);
+      color: #fff;
+    }
+    .mode-btn.active-out {
+      background: var(--accent-primary);
+      color: #fff;
     }
   </style>
 </head>
 <body>
   <main class="mobile-shell">
     <div class="mobile-header-card">
-      <span class="brand-badge">MATH 319 &bull; STUDENT PORTAL</span>
-      <h1>University Math Lab Check-In</h1>
-      <p>Check in when you arrive and check out when you leave so we can staff your courses with zero wait time.</p>
-      <div style="margin-top:0.75rem;">
-        <a href="index.html" class="btn" style="text-decoration:none;font-size:0.76rem;padding:0.3rem 0.7rem;">
+      <span class="brand-badge" id="m-mode-badge">MATH 319 &bull; STUDENT PORTAL</span>
+      <h1 id="m-page-title">University Math Lab</h1>
+      <p id="m-page-subtitle">Quick QR Check-In &amp; Check-Out</p>
+      <div style="margin-top:0.65rem;">
+        <a href="index.html" class="btn" style="text-decoration:none;font-size:0.74rem;padding:0.28rem 0.65rem;">
           &larr; Back to Full Analytics Dashboard
         </a>
       </div>
     </div>
 
-    <div class="card">
+    <!-- Mode Switcher (Auto-selected based on QR #1 ?mode=in or QR #2 ?mode=out) -->
+    <div class="mode-switch-bar" role="tablist">
+      <button type="button" class="mode-btn active-in" id="btn-mode-in">
+        ✅ QR #1: Check In (Arriving)
+      </button>
+      <button type="button" class="mode-btn" id="btn-mode-out">
+        👋 QR #2: Check Out (Leaving)
+      </button>
+    </div>
+
+    <!-- SCREEN 1: CHECK-IN CARD (Shown when scanning QR Code #1 ?mode=in) -->
+    <div class="card" id="card-mode-in">
       <form id="mobile-checkin-form" action="checkin.html" method="POST" novalidate>
         <fieldset class="kiosk-fieldset">
-          <legend>1. Arriving? Check In Here</legend>
+          <legend>Arriving at the Math Lab — Check In</legend>
 
           <div class="kiosk-form-group">
             <label for="m-student-name">Student Name or University ID *</label>
@@ -99,18 +139,23 @@
           </div>
 
           <button type="submit" class="btn btn-emerald" style="width:100%;justify-content:center;min-height:50px;font-size:1rem;">
-            ✅ Check In to Math Lab
+            ✅ Complete Check-In
           </button>
         </fieldset>
       </form>
     </div>
 
-    <div class="card">
+    <!-- SCREEN 2: CHECK-OUT CARD (Shown when scanning QR Code #2 ?mode=out) -->
+    <div class="card" id="card-mode-out" style="display:none;">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>2. Leaving? Tap Your Name to Check Out</h2>
-          <p>Tap <strong>Check Out</strong> when you finish so your session length is recorded</p>
+          <h2>Leaving the Math Lab — Tap Your Name to Check Out</h2>
+          <p>Tap <strong>👋 Check Out</strong> next to your name so your tutoring session duration is recorded</p>
         </div>
+      </div>
+      <div class="kiosk-form-group" style="margin-bottom:0.85rem;">
+        <label for="m-checkout-search">Filter by Your Name or ID (Optional)</label>
+        <input type="text" id="m-checkout-search" name="checkout_search" class="kiosk-input" placeholder="Search your name or ID..." autocorrect="off" autocapitalize="off" spellcheck="false" />
       </div>
       <div id="m-active-list"></div>
     </div>
@@ -158,6 +203,39 @@
       const hrSel = document.getElementById("m-hour-select");
       const nameInput = document.getElementById("m-student-name");
       const form = document.getElementById("mobile-checkin-form");
+      const searchOutInput = document.getElementById("m-checkout-search");
+
+      const btnModeIn = document.getElementById("btn-mode-in");
+      const btnModeOut = document.getElementById("btn-mode-out");
+      const cardIn = document.getElementById("card-mode-in");
+      const cardOut = document.getElementById("card-mode-out");
+      const pageTitle = document.getElementById("m-page-title");
+      const pageSub = document.getElementById("m-page-subtitle");
+      const modeBadge = document.getElementById("m-mode-badge");
+
+      function setMode(mode) {
+        if (mode === "out") {
+          cardIn.style.display = "none";
+          cardOut.style.display = "block";
+          btnModeIn.className = "mode-btn";
+          btnModeOut.className = "mode-btn active-out";
+          pageTitle.textContent = "Math Lab Student Check-Out";
+          pageSub.textContent = "Scan #2 (Exit) • Tap your name below to check out as you leave";
+          modeBadge.textContent = "QR #2 • EXIT CHECK-OUT";
+          renderActiveList();
+        } else {
+          cardIn.style.display = "block";
+          cardOut.style.display = "none";
+          btnModeIn.className = "mode-btn active-in";
+          btnModeOut.className = "mode-btn";
+          pageTitle.textContent = "Math Lab Student Check-In";
+          pageSub.textContent = "Scan #1 (Entrance) • Enter your name and course as you arrive";
+          modeBadge.textContent = "QR #1 • ENTRANCE CHECK-IN";
+        }
+      }
+
+      btnModeIn.addEventListener("click", () => setMode("in"));
+      btnModeOut.addEventListener("click", () => setMode("out"));
 
       // Sync aria-invalid for required field accessibility
       const syncAriaInvalid = (input) => {
@@ -201,10 +279,15 @@
 
       function renderActiveList() {
         state = loadState();
-        const active = (state.attendanceLog || []).filter(r => r.status === "active");
+        const query = (searchOutInput ? searchOutInput.value : "").trim().toLowerCase();
+        const active = (state.attendanceLog || []).filter(r => {
+          if (r.status !== "active") return false;
+          if (!query) return true;
+          return (r.studentName || "").toLowerCase().includes(query) || (r.courseCode || "").toLowerCase().includes(query);
+        });
         const wrap = document.getElementById("m-active-list");
         if (active.length === 0) {
-          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No students currently checked in.</div>`;
+          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No matching active students found.</div>`;
           return;
         }
         wrap.innerHTML = active.map(r => `
@@ -238,6 +321,10 @@
             }
           });
         });
+      }
+
+      if (searchOutInput) {
+        searchOutInput.addEventListener("input", renderActiveList);
       }
 
       form.addEventListener("submit", e => {
@@ -280,7 +367,12 @@
       });
 
       populateOptions();
-      renderActiveList();
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("mode") === "out") {
+        setMode("out");
+      } else {
+        setMode("in");
+      }
     })();
   </script>
 </body>
