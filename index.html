@@ -462,65 +462,52 @@
               </div>
             </div>
 
-            <!-- Semantic Check-In Form -->
+            <!-- Semantic Name-Only Check-In Form -->
             <form id="qr-checkin-form" action="#tab-qr" method="POST" novalidate>
               <fieldset class="kiosk-fieldset">
-                <legend>Student Check-In Kiosk</legend>
+                <legend>1-Step Student Check-In (Name Only!)</legend>
 
-                <div class="kiosk-form-group">
-                  <label for="checkin-student-name">Student Name or ID *</label>
+                <div class="kiosk-form-group" style="margin-block-end:0.65rem;">
+                  <label for="checkin-student-name">Student Name *</label>
                   <input
                     type="text"
                     id="checkin-student-name"
                     name="student_name"
+                    list="student-profile-datalist"
                     class="kiosk-input"
-                    placeholder="e.g. Jordan Miles (#90214)"
+                    placeholder="Type student name (e.g. Jordan Miles)..."
                     required
-                    autocorrect="off"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    enterkeyhint="next"
+                    autocomplete="name"
+                    enterkeyhint="done"
                     aria-describedby="checkin-name-error"
                   />
+                  <datalist id="student-profile-datalist"></datalist>
                   <div id="checkin-name-error" class="error-msg" aria-live="polite">
-                    <span aria-hidden="true">❌</span> Please enter your student name or ID number.
+                    <span aria-hidden="true">❌</span> Please enter your student name.
                   </div>
                 </div>
 
-                <div class="kiosk-form-group">
-                  <label for="checkin-course-select">Course Section &amp; Lecturer *</label>
-                  <select id="checkin-course-select" name="course_code" class="kiosk-input"></select>
+                <!-- 1-Tap Quick-Select Student Profile Pills -->
+                <div style="margin-bottom:0.75rem;">
+                  <div style="font-size:0.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.3rem;">
+                    ⚡ Tap a Student Profile to Auto-Fill (or type any name above):
+                  </div>
+                  <div id="checkin-profile-quick-chips" style="display:flex;flex-wrap:wrap;gap:0.35rem;"></div>
                 </div>
 
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;">
-                  <div class="kiosk-form-group">
-                    <label for="checkin-subject-select">Math Subject *</label>
-                    <select id="checkin-subject-select" name="subject" class="kiosk-input"></select>
-                  </div>
-                  <div class="kiosk-form-group">
-                    <label for="checkin-day-select">Day &amp; Hour Block *</label>
-                    <div style="display:flex;gap:0.35rem;">
-                      <select id="checkin-day-select" name="day" class="kiosk-input" style="padding:0.4rem;">
-                        <option value="Monday">Mon</option>
-                        <option value="Tuesday">Tue</option>
-                        <option value="Wednesday">Wed</option>
-                        <option value="Thursday">Thu</option>
-                      </select>
-                      <select id="checkin-hour-select" name="hour_block" class="kiosk-input" style="padding:0.4rem;"></select>
-                    </div>
-                  </div>
-                </div>
+                <!-- Live Gamified Student Profile Card Preview -->
+                <div id="checkin-profile-preview-card" style="margin-bottom:0.8rem;padding:0.75rem;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-color);"></div>
 
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.75rem;">
-                  <label for="checkin-autosync-toggle" style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--text-secondary);cursor:pointer;">
+                  <label for="checkin-autosync-toggle" style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.76rem;color:var(--text-secondary);cursor:pointer;">
                     <input type="checkbox" id="checkin-autosync-toggle" name="auto_sync" checked style="accent-color:var(--accent-emerald);width:16px;height:16px;" />
-                    <span>Auto-add check-in to Lab Hourly Arrivals (&lambda;<sub>d,t,s</sub>)</span>
+                    <span>Auto-sync check-in to Lab Arrivals (&lambda;<sub>d,t,s</sub>) via Student Profile</span>
                   </label>
                 </div>
 
                 <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                  <button type="submit" id="btn-submit-checkin" class="btn btn-emerald" style="flex:1;justify-content:center;min-height:48px;font-size:0.9rem;">
-                    ✅ Check In Student
+                  <button type="submit" id="btn-submit-checkin" class="btn btn-emerald" style="flex:1;justify-content:center;min-height:48px;font-size:0.92rem;">
+                    ✅ Check In (+50 XP)
                   </button>
                   <button type="button" id="btn-sim-trig-wave" class="btn btn-amber" title="Simulate 5 Trigonometry students checking in at 10:00 AM" style="min-height:48px;font-size:0.78rem;">
                     ⚡ Demo +5 Trig Rush
@@ -593,11 +580,28 @@
         </div>
       </div>
 
+      <!-- Card 3: Gamified Student Profiles & Leaderboard Studio -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>3. 🏆 Gamified Student Profiles &amp; Study Streaks (Zero-Form Check-In Directory)</h2>
+            <p>Each student's profile stores their Course Section, Subject, and Lecturer once—so when they scan QR #1 or QR #2, they <strong>only enter their Name</strong> and earn XP, Levels &amp; Streak Badges!</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+            <span class="badge badge-amber">+50 XP Check-In &bull; +100 XP Check-Out</span>
+            <button type="button" class="btn btn-primary" id="btn-add-student-profile">
+              + Add Student Profile
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap" id="qr-student-profiles-wrap"></div>
+      </div>
+
       <!-- Bottom Card: Completed Check-In / Check-Out Log & Subject Breakdown -->
       <div class="card">
         <div class="card-header">
           <div class="card-title-group">
-            <h2>3. Completed Check-In / Check-Out Log &amp; Lecturer Attribution</h2>
+            <h2>4. Completed Check-In / Check-Out Log &amp; Lecturer Attribution</h2>
             <p>Full timestamped audit trail showing which courses, professors, and subjects drive Math Lab traffic and how long each session lasted</p>
           </div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">

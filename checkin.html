@@ -61,14 +61,28 @@
       background: var(--accent-primary);
       color: #fff;
     }
+    .xp-bar-track {
+      width: 100%;
+      height: 8px;
+      background: rgba(148, 163, 184, 0.2);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 0.35rem;
+    }
+    .xp-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #3b82f6);
+      border-radius: 99px;
+      transition: width 0.25s ease;
+    }
   </style>
 </head>
 <body>
   <main class="mobile-shell">
     <div class="mobile-header-card">
-      <span class="brand-badge" id="m-mode-badge">MATH 319 &bull; STUDENT PORTAL</span>
+      <span class="brand-badge" id="m-mode-badge">MATH 319 &bull; GAMIFIED STUDENT PORTAL</span>
       <h1 id="m-page-title">University Math Lab</h1>
-      <p id="m-page-subtitle">Quick QR Check-In &amp; Check-Out</p>
+      <p id="m-page-subtitle">Enter only your name — your Student Profile handles the rest!</p>
       <div style="margin-top:0.65rem;">
         <a href="index.html" class="btn" style="text-decoration:none;font-size:0.74rem;padding:0.28rem 0.65rem;">
           &larr; Back to Full Analytics Dashboard
@@ -79,83 +93,67 @@
     <!-- Mode Switcher (Auto-selected based on QR #1 ?mode=in or QR #2 ?mode=out) -->
     <div class="mode-switch-bar" role="tablist">
       <button type="button" class="mode-btn active-in" id="btn-mode-in">
-        ✅ QR #1: Check In (Arriving)
+        ✅ QR #1: Check In (+50 XP)
       </button>
       <button type="button" class="mode-btn" id="btn-mode-out">
-        👋 QR #2: Check Out (Leaving)
+        👋 QR #2: Check Out (+100 XP)
       </button>
     </div>
 
-    <!-- SCREEN 1: CHECK-IN CARD (Shown when scanning QR Code #1 ?mode=in) -->
+    <!-- SCREEN 1: 1-STEP NAME-ONLY CHECK-IN CARD (QR Code #1 ?mode=in) -->
     <div class="card" id="card-mode-in">
       <form id="mobile-checkin-form" action="checkin.html" method="POST" novalidate>
         <fieldset class="kiosk-fieldset">
-          <legend>Arriving at the Math Lab — Check In</legend>
+          <legend>Arriving? Enter Only Your Name</legend>
 
-          <div class="kiosk-form-group">
-            <label for="m-student-name">Student Name or University ID *</label>
+          <div class="kiosk-form-group" style="margin-block-end:0.65rem;">
+            <label for="m-student-name">Student Name *</label>
             <input
               type="text"
               id="m-student-name"
               name="student_name"
+              list="m-profile-datalist"
               class="kiosk-input"
-              placeholder="e.g. Alex Rivera (#90312)"
+              placeholder="Type your name (e.g. Jordan Miles)..."
               required
-              autocorrect="off"
-              autocapitalize="off"
-              spellcheck="false"
-              enterkeyhint="next"
+              autocomplete="name"
+              enterkeyhint="done"
               aria-describedby="m-name-error"
             />
+            <datalist id="m-profile-datalist"></datalist>
             <div id="m-name-error" class="error-msg" aria-live="polite">
-              <span aria-hidden="true">❌</span> Please enter your student name or ID number.
+              <span aria-hidden="true">❌</span> Please enter your student name.
             </div>
           </div>
 
-          <div class="kiosk-form-group">
-            <label for="m-course-select">Course Section &amp; Lecturer *</label>
-            <select id="m-course-select" name="course_code" class="kiosk-input"></select>
-          </div>
-
-          <div class="kiosk-form-group">
-            <label for="m-subject-select">Math Subject *</label>
-            <select id="m-subject-select" name="subject" class="kiosk-input"></select>
-          </div>
-
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;">
-            <div class="kiosk-form-group">
-              <label for="m-day-select">Day *</label>
-              <select id="m-day-select" name="day" class="kiosk-input">
-                <option value="Monday">Monday</option>
-                <option value="Tuesday">Tuesday</option>
-                <option value="Wednesday">Wednesday</option>
-                <option value="Thursday">Thursday</option>
-              </select>
+          <div style="margin-bottom:0.75rem;">
+            <div style="font-size:0.73rem;font-weight:700;color:var(--text-secondary);margin-bottom:0.35rem;">
+              ⚡ Or Tap Your Student Profile Name:
             </div>
-            <div class="kiosk-form-group">
-              <label for="m-hour-select">Arrival Hour *</label>
-              <select id="m-hour-select" name="hour_block" class="kiosk-input"></select>
-            </div>
+            <div id="m-quick-profile-chips" style="display:flex;flex-wrap:wrap;gap:0.35rem;"></div>
           </div>
 
-          <button type="submit" class="btn btn-emerald" style="width:100%;justify-content:center;min-height:50px;font-size:1rem;">
-            ✅ Complete Check-In
+          <!-- Gamified Student Profile Preview Card -->
+          <div id="m-profile-preview" style="margin-bottom:0.85rem;padding:0.85rem;border-radius:10px;background:var(--bg-card);border:1px solid var(--border-color);"></div>
+
+          <button type="submit" class="btn btn-emerald" style="width:100%;justify-content:center;min-height:52px;font-size:1.02rem;font-weight:800;">
+            ✅ Check In Now (+50 XP &amp; 🔥 Streak)
           </button>
         </fieldset>
       </form>
     </div>
 
-    <!-- SCREEN 2: CHECK-OUT CARD (Shown when scanning QR Code #2 ?mode=out) -->
+    <!-- SCREEN 2: 1-TAP NAME-ONLY CHECK-OUT CARD (QR Code #2 ?mode=out) -->
     <div class="card" id="card-mode-out" style="display:none;">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>Leaving the Math Lab — Tap Your Name to Check Out</h2>
-          <p>Tap <strong>👋 Check Out</strong> next to your name so your tutoring session duration is recorded</p>
+          <h2>Leaving? Tap Your Name to Check Out (+100 XP)</h2>
+          <p>Tap <strong>👋 Check Out</strong> next to your name to claim your session XP and update your study streak!</p>
         </div>
       </div>
       <div class="kiosk-form-group" style="margin-bottom:0.85rem;">
-        <label for="m-checkout-search">Filter by Your Name or ID (Optional)</label>
-        <input type="text" id="m-checkout-search" name="checkout_search" class="kiosk-input" placeholder="Search your name or ID..." autocorrect="off" autocapitalize="off" spellcheck="false" />
+        <label for="m-checkout-search">Find Your Name</label>
+        <input type="text" id="m-checkout-search" name="checkout_search" class="kiosk-input" placeholder="Type your name to filter..." autocomplete="name" />
       </div>
       <div id="m-active-list"></div>
     </div>
@@ -167,21 +165,32 @@
   <script>
     (function () {
       const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
+      const LAST_STUDENT_KEY = "MATH319_REMEMBERED_STUDENT_NAME";
+
+      function getLevelInfo(xp) {
+        const val = Number(xp) || 0;
+        if (val >= 800) return { level: 4, title: "👑 Math Lab Legend", nextXp: 1200, pct: Math.min(100, Math.round(((val - 800) / 400) * 100)) };
+        if (val >= 450) return { level: 3, title: "⚡ Theorem Master", nextXp: 800, pct: Math.round(((val - 450) / 350) * 100) };
+        if (val >= 200) return { level: 2, title: "📐 Problem Solver", nextXp: 450, pct: Math.round(((val - 200) / 250) * 100) };
+        return { level: 1, title: "🌱 Lab Rookie", nextXp: 200, pct: Math.round((val / 200) * 100) };
+      }
 
       function loadState() {
+        const def = window.MATH_LAB_DEFAULT_DATA;
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && parsed.tutors && parsed.hourlyArrivals) {
-              if (!Array.isArray(parsed.attendanceLog)) {
-                parsed.attendanceLog = JSON.parse(JSON.stringify(window.MATH_LAB_DEFAULT_DATA.attendanceLog || []));
+              if (!Array.isArray(parsed.attendanceLog)) parsed.attendanceLog = JSON.parse(JSON.stringify(def.attendanceLog || []));
+              if (!Array.isArray(parsed.studentProfiles) || parsed.studentProfiles.length === 0) {
+                parsed.studentProfiles = JSON.parse(JSON.stringify(def.studentProfiles || []));
               }
               return parsed;
             }
           }
         } catch (e) {}
-        return JSON.parse(JSON.stringify(window.MATH_LAB_DEFAULT_DATA));
+        return JSON.parse(JSON.stringify(def));
       }
 
       function saveState(state, msg) {
@@ -193,14 +202,11 @@
           t.textContent = msg;
           t.classList.add("show");
           clearTimeout(t._timer);
-          t._timer = setTimeout(() => t.classList.remove("show"), 2600);
+          t._timer = setTimeout(() => t.classList.remove("show"), 3000);
         }
       }
 
       let state = loadState();
-      const courseSel = document.getElementById("m-course-select");
-      const subSel = document.getElementById("m-subject-select");
-      const hrSel = document.getElementById("m-hour-select");
       const nameInput = document.getElementById("m-student-name");
       const form = document.getElementById("mobile-checkin-form");
       const searchOutInput = document.getElementById("m-checkout-search");
@@ -220,7 +226,7 @@
           btnModeIn.className = "mode-btn";
           btnModeOut.className = "mode-btn active-out";
           pageTitle.textContent = "Math Lab Student Check-Out";
-          pageSub.textContent = "Scan #2 (Exit) • Tap your name below to check out as you leave";
+          pageSub.textContent = "Scan #2 (Exit) • Tap your name below to claim +100 XP!";
           modeBadge.textContent = "QR #2 • EXIT CHECK-OUT";
           renderActiveList();
         } else {
@@ -229,52 +235,116 @@
           btnModeIn.className = "mode-btn active-in";
           btnModeOut.className = "mode-btn";
           pageTitle.textContent = "Math Lab Student Check-In";
-          pageSub.textContent = "Scan #1 (Entrance) • Enter your name and course as you arrive";
+          pageSub.textContent = "Scan #1 (Entrance) • Enter only your name — your profile does the rest!";
           modeBadge.textContent = "QR #1 • ENTRANCE CHECK-IN";
+          renderProfileSupport();
         }
       }
 
       btnModeIn.addEventListener("click", () => setMode("in"));
       btnModeOut.addEventListener("click", () => setMode("out"));
 
-      // Sync aria-invalid for required field accessibility
-      const syncAriaInvalid = (input) => {
-        if (!input.checkValidity()) {
-          input.setAttribute("aria-invalid", "true");
-        } else {
-          input.removeAttribute("aria-invalid");
-        }
-      };
-      form.addEventListener("blur", e => {
-        if (e.target.matches("input[required]")) syncAriaInvalid(e.target);
-      }, true);
-      form.addEventListener("input", e => {
-        if (e.target.matches("input[required]") && e.target.checkValidity()) {
-          e.target.removeAttribute("aria-invalid");
-        }
-      });
+      function findOrCreateProfile(rawName, saveIfNew) {
+        const clean = (rawName || "").trim();
+        if (!clean) return null;
+        const existing = (state.studentProfiles || []).find(p => p.name.toLowerCase() === clean.toLowerCase());
+        if (existing) return existing;
 
-      function populateOptions() {
-        subSel.innerHTML = state.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
-        hrSel.innerHTML = state.meta.operatingHours.map(h => `<option value="${h.id}" ${h.id === "10:00" ? "selected" : ""}>${h.label}</option>`).join("");
-        courseSel.innerHTML = (state.classSchedule || []).map((c, idx) => {
-          const profs = Array.isArray(c.lecturers) ? c.lecturers.join(", ") : "Staff";
-          return `<option value="${idx}">${c.code} — ${c.title} (${profs})</option>`;
-        }).join("") + `<option value="other">Other / General Walk-In</option>`;
-
-        if (state.classSchedule && state.classSchedule[0]) {
-          subSel.value = state.classSchedule[0].subject;
-          hrSel.value = state.classSchedule[0].releaseHour || "10:00";
+        const firstClass = (state.classSchedule && state.classSchedule[0]) || {
+          code: "MATH 112-01",
+          subject: "trig",
+          lecturers: ["Prof. Ross"]
+        };
+        const newProf = {
+          name: clean,
+          courseCode: firstClass.code || "MATH 112-01",
+          subject: firstClass.subject || "trig",
+          lecturer: Array.isArray(firstClass.lecturers) ? firstClass.lecturers.join(", ") : "Prof. Ross",
+          xp: 100,
+          streak: 1,
+          visits: 1,
+          totalMinutes: 20,
+          badges: ["🌱 New Explorer"]
+        };
+        if (saveIfNew) {
+          state.studentProfiles.unshift(newProf);
         }
+        return newProf;
       }
 
-      courseSel.addEventListener("change", () => {
-        const val = courseSel.value;
-        if (val !== "other" && state.classSchedule[Number(val)]) {
-          const c = state.classSchedule[Number(val)];
-          subSel.value = c.subject;
-          if (c.releaseHour) hrSel.value = c.releaseHour;
+      function renderProfilePreview(nameVal) {
+        const previewEl = document.getElementById("m-profile-preview");
+        if (!previewEl) return;
+        const clean = (nameVal || "").trim();
+        if (!clean) {
+          previewEl.innerHTML = `
+            <div style="font-size:0.8rem;color:var(--text-secondary);text-align:center;">
+              👆 Type or tap your name above to load your <strong>Gamified Student Profile</strong> (Course, Lecturer, Level &amp; 🔥 Streak)!
+            </div>
+          `;
+          return;
         }
+        const prof = findOrCreateProfile(clean, false);
+        const isExisting = (state.studentProfiles || []).some(p => p.name.toLowerCase() === clean.toLowerCase());
+        const lvl = getLevelInfo(prof.xp);
+        const subObj = (state.subjects || []).find(s => s.id === prof.subject) || { name: "Trigonometry", color: "#f59e0b" };
+        const badgesHtml = (prof.badges || []).map(b => `<span class="badge badge-amber" style="font-size:0.66rem;margin-right:0.25rem;">${b}</span>`).join("");
+
+        previewEl.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:800;font-size:0.98rem;color:var(--text-primary);">
+                ${prof.name} ${isExisting ? '<span class="badge badge-emerald" style="font-size:0.65rem;margin-left:0.3rem;">Verified Profile</span>' : '<span class="badge badge-blue" style="font-size:0.65rem;margin-left:0.3rem;">New Profile Auto-Created</span>'}
+              </div>
+              <div style="font-size:0.77rem;color:var(--text-secondary);margin-top:0.15rem;">
+                Auto-Linked: <strong>${prof.courseCode}</strong> &bull; 👨‍🏫 ${prof.lecturer} &bull; <span class="subject-pill" style="background:${subObj.color}">${subObj.name}</span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-weight:800;font-size:0.82rem;color:var(--accent-primary);">${lvl.title} (Lvl ${lvl.level})</div>
+              <div style="font-size:0.74rem;color:var(--accent-amber);font-weight:700;">🔥 ${prof.streak}-Visit Streak &bull; ${prof.xp} XP</div>
+            </div>
+          </div>
+          <div class="xp-bar-track">
+            <div class="xp-bar-fill" style="width:${lvl.pct}%;"></div>
+          </div>
+          <div style="margin-top:0.45rem;">${badgesHtml}</div>
+        `;
+      }
+
+      function renderProfileSupport() {
+        state = loadState();
+        const dl = document.getElementById("m-profile-datalist");
+        if (dl) {
+          dl.innerHTML = (state.studentProfiles || []).map(p => `<option value="${p.name}">${p.courseCode} (${p.lecturer}) — Lvl ${getLevelInfo(p.xp).level}</option>`).join("");
+        }
+        const chipsWrap = document.getElementById("m-quick-profile-chips");
+        if (chipsWrap) {
+          chipsWrap.innerHTML = (state.studentProfiles || []).map(p => `
+            <button type="button" class="tutor-chip m-chip-select-student" data-name="${p.name.replace(/"/g, '&quot;')}" style="font-size:0.75rem;padding:0.25rem 0.6rem;">
+              <span>🔥 ${p.name}</span>
+            </button>
+          `).join("");
+
+          chipsWrap.querySelectorAll(".m-chip-select-student").forEach(btn => {
+            btn.addEventListener("click", e => {
+              const chosen = e.currentTarget.getAttribute("data-name");
+              nameInput.value = chosen;
+              nameInput.removeAttribute("aria-invalid");
+              renderProfilePreview(chosen);
+            });
+          });
+        }
+        const remembered = localStorage.getItem(LAST_STUDENT_KEY);
+        if (remembered && !nameInput.value) {
+          nameInput.value = remembered;
+        }
+        renderProfilePreview(nameInput.value);
+      }
+
+      nameInput.addEventListener("input", () => {
+        if (nameInput.value.trim()) nameInput.removeAttribute("aria-invalid");
+        renderProfilePreview(nameInput.value);
       });
 
       function renderActiveList() {
@@ -287,36 +357,45 @@
         });
         const wrap = document.getElementById("m-active-list");
         if (active.length === 0) {
-          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No matching active students found.</div>`;
+          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No active check-ins found. Switch to Check In above!</div>`;
           return;
         }
-        wrap.innerHTML = active.map(r => `
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.75rem;border:1px solid var(--border-color);border-radius:8px;margin-bottom:0.5rem;background:var(--bg-subtle);">
-            <div>
-              <div style="font-weight:700;font-size:0.92rem;">${r.studentName}</div>
-              <div style="font-size:0.76rem;color:var(--text-secondary);">${r.courseCode} (${r.lecturer}) &bull; Arrived ${r.checkInTime}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:0.4rem;">
-              <input type="number" class="num-input m-dur-input" data-id="${r.id}" value="${r.durationMinutes || 20}" min="1" max="180" style="width:58px;" title="Session duration (minutes)" />
-              <span style="font-size:0.74rem;color:var(--text-secondary);">min</span>
-              <button type="button" class="btn btn-primary m-btn-checkout" data-id="${r.id}" style="min-height:42px;padding:0.4rem 0.75rem;">
-                👋 Check Out
+        wrap.innerHTML = active.map(r => {
+          const prof = findOrCreateProfile(r.studentName, false);
+          const lvl = getLevelInfo(prof ? prof.xp : 150);
+          return `
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.8rem;border:1px solid var(--border-color);border-radius:10px;margin-bottom:0.55rem;background:var(--bg-subtle);">
+              <div>
+                <div style="font-weight:800;font-size:0.95rem;">${r.studentName} <span style="font-size:0.73rem;color:var(--accent-amber);">🔥 ${prof ? prof.streak : 1} streak</span></div>
+                <div style="font-size:0.75rem;color:var(--text-secondary);">${r.courseCode} (${r.lecturer}) &bull; In at ${r.checkInTime} &bull; ${lvl.title}</div>
+              </div>
+              <button type="button" class="btn btn-primary m-btn-checkout" data-id="${r.id}" style="min-height:46px;padding:0.45rem 0.85rem;font-weight:800;">
+                👋 Check Out (+100 XP)
               </button>
             </div>
-          </div>
-        `).join("");
+          `;
+        }).join("");
 
         wrap.querySelectorAll(".m-btn-checkout").forEach(btn => {
           btn.addEventListener("click", e => {
             const id = e.currentTarget.getAttribute("data-id");
-            const durInp = wrap.querySelector(`.m-dur-input[data-id="${id}"]`);
-            const mins = durInp ? Math.max(1, parseInt(durInp.value, 10) || 20) : 20;
             const rec = state.attendanceLog.find(x => x.id === id);
             if (rec) {
+              const mins = rec.durationMinutes || 20;
               rec.status = "completed";
               rec.durationMinutes = mins;
               rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-              saveState(state, `Checked out ${rec.studentName} (${mins} min session)!`);
+              rec.xpEarned = (rec.xpEarned || 50) + 100;
+
+              const prof = findOrCreateProfile(rec.studentName, true);
+              if (prof) {
+                prof.xp = (Number(prof.xp) || 0) + 100;
+                prof.totalMinutes = (Number(prof.totalMinutes) || 0) + mins;
+                if (prof.totalMinutes >= 100 && !(prof.badges || []).includes("⏱️ 100+ Min Club")) {
+                  prof.badges.push("⏱️ 100+ Min Club");
+                }
+              }
+              saveState(state, `🎉 Checked out ${rec.studentName}! +100 XP earned (${prof ? prof.xp : 200} total XP)!`);
               renderActiveList();
             }
           });
@@ -329,30 +408,40 @@
 
       form.addEventListener("submit", e => {
         e.preventDefault();
-        syncAriaInvalid(nameInput);
-        if (!form.checkValidity()) {
+        const rawName = (nameInput.value || "").trim();
+        if (!rawName) {
+          nameInput.setAttribute("aria-invalid", "true");
           nameInput.focus();
           return;
         }
         state = loadState();
-        const cIdx = courseSel.value;
-        const courseObj = (cIdx !== "other" && state.classSchedule[Number(cIdx)]) ? state.classSchedule[Number(cIdx)] : null;
-        const day = document.getElementById("m-day-select").value;
-        const hr = hrSel.value;
-        const sub = subSel.value;
+        const prof = findOrCreateProfile(rawName, true);
+        prof.xp = (Number(prof.xp) || 0) + 50;
+        prof.streak = (Number(prof.streak) || 0) + 1;
+        prof.visits = (Number(prof.visits) || 0) + 1;
+        if (prof.streak >= 3 && !(prof.badges || []).some(b => b.includes("Streak"))) {
+          prof.badges.push(`🔥 ${prof.streak}-Day Streak`);
+        }
+
+        // Determine release hour from student's course section in classSchedule
+        const matchedCourse = (state.classSchedule || []).find(c => c.code === prof.courseCode);
+        const day = "Monday";
+        const hr = (matchedCourse && matchedCourse.releaseHour) ? matchedCourse.releaseHour : "10:00";
+        const sub = prof.subject || "trig";
         const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         const newRec = {
           id: "chk-" + Date.now(),
-          studentName: nameInput.value.trim(),
-          courseCode: courseObj ? courseObj.code : "General Walk-In",
-          lecturer: courseObj && Array.isArray(courseObj.lecturers) ? courseObj.lecturers.join(", ") : "Dept. Faculty",
+          studentName: prof.name,
+          courseCode: prof.courseCode,
+          lecturer: prof.lecturer,
           subject: sub,
           day: day,
           hourBlock: hr,
           checkInTime: nowStr,
           checkOutTime: null,
           durationMinutes: 20,
+          xpEarned: 50,
           status: "active"
         };
 
@@ -360,13 +449,16 @@
         if (state.hourlyArrivals[day] && state.hourlyArrivals[day][hr]) {
           state.hourlyArrivals[day][hr][sub] = (Number(state.hourlyArrivals[day][hr][sub]) || 0) + 1;
         }
-        saveState(state, `Checked in ${newRec.studentName} (+1 ${sub.toUpperCase()} arrival)!`);
-        nameInput.value = "";
-        nameInput.removeAttribute("aria-invalid");
+
+        try {
+          localStorage.setItem(LAST_STUDENT_KEY, prof.name);
+        } catch (err) {}
+
+        saveState(state, `🎉 Welcome ${prof.name}! +50 XP & 🔥 ${prof.streak}-Visit Streak (${prof.courseCode})!`);
+        renderProfileSupport();
         renderActiveList();
       });
 
-      populateOptions();
       const params = new URLSearchParams(window.location.search);
       if (params.get("mode") === "out") {
         setMode("out");

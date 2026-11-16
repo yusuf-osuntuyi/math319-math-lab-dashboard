@@ -415,10 +415,95 @@ window.MATH_LAB_DEFAULT_DATA = {
     autoSyncArrivals: true
   },
 
+  // --------------------------------------------------------------------------
+  // 8. GAMIFIED STUDENT PROFILES (Enables 1-Step "Name Only" QR Check-In)
+  //    Each student's profile stores their enrolled Course Section, Subject,
+  //    and Lecturer so they ONLY type/tap their Name when scanning the QR code!
+  // --------------------------------------------------------------------------
+  studentProfiles: [
+    {
+      name: "Jordan Miles",
+      courseCode: "MATH 112-01",
+      subject: "trig",
+      lecturer: "Prof. Ross",
+      xp: 640,
+      streak: 5,
+      visits: 6,
+      totalMinutes: 112,
+      badges: ["🔥 5-Day Streak", "🎯 10 AM Trig Regular", "⏱️ 100+ Min Club"]
+    },
+    {
+      name: "Amina Bello",
+      courseCode: "MATH 112-01",
+      subject: "trig",
+      lecturer: "Prof. Ross",
+      xp: 520,
+      streak: 4,
+      visits: 5,
+      totalMinutes: 94,
+      badges: ["🔥 4-Day Streak", "🎯 10 AM Trig Regular"]
+    },
+    {
+      name: "Devon Brooks",
+      courseCode: "MATH 111-01/02",
+      subject: "alg",
+      lecturer: "Prof. Reynolds",
+      xp: 310,
+      streak: 3,
+      visits: 3,
+      totalMinutes: 64,
+      badges: ["🔥 3-Day Streak", "📐 Algebra Builder"]
+    },
+    {
+      name: "Chloe Nguyen",
+      courseCode: "MATH 112-02",
+      subject: "trig",
+      lecturer: "Dr. Carter",
+      xp: 890,
+      streak: 7,
+      visits: 8,
+      totalMinutes: 156,
+      badges: ["👑 Lab Legend", "🔥 7-Day Streak", "⏱️ 100+ Min Club"]
+    },
+    {
+      name: "Marcus Vance",
+      courseCode: "MATH 115-01/02",
+      subject: "pre",
+      lecturer: "Prof. Alvarez",
+      xp: 430,
+      streak: 3,
+      visits: 4,
+      totalMinutes: 86,
+      badges: ["🔥 3-Day Streak", "🚀 Precalc Pro"]
+    },
+    {
+      name: "Sofia Patel",
+      courseCode: "MATH 161-01",
+      subject: "calc",
+      lecturer: "Prof. Ross",
+      xp: 750,
+      streak: 6,
+      visits: 7,
+      totalMinutes: 138,
+      badges: ["🔥 6-Day Streak", "∫ Calculus Ace", "⏱️ 100+ Min Club"]
+    },
+    {
+      name: "Liam O'Connor",
+      courseCode: "MATH 200-01/02",
+      subject: "stats",
+      lecturer: "Dr. Patel",
+      xp: 240,
+      streak: 2,
+      visits: 2,
+      totalMinutes: 40,
+      badges: ["📊 Stats Explorer"]
+    }
+  ],
+
   attendanceLog: [
     {
       id: "chk-101",
-      studentName: "Jordan Miles (#90214)",
+      studentName: "Jordan Miles",
       courseCode: "MATH 112-01",
       lecturer: "Prof. Ross",
       subject: "trig",
@@ -427,11 +512,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       checkInTime: "10:02 AM",
       checkOutTime: null,
       durationMinutes: 18,
+      xpEarned: 50,
       status: "active"
     },
     {
       id: "chk-102",
-      studentName: "Amina Bello (#90488)",
+      studentName: "Amina Bello",
       courseCode: "MATH 112-01",
       lecturer: "Prof. Ross",
       subject: "trig",
@@ -440,11 +526,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       checkInTime: "10:05 AM",
       checkOutTime: null,
       durationMinutes: 15,
+      xpEarned: 50,
       status: "active"
     },
     {
       id: "chk-103",
-      studentName: "Devon Brooks (#88319)",
+      studentName: "Devon Brooks",
       courseCode: "MATH 111-01/02",
       lecturer: "Prof. Reynolds",
       subject: "alg",
@@ -453,24 +540,26 @@ window.MATH_LAB_DEFAULT_DATA = {
       checkInTime: "1:04 PM",
       checkOutTime: null,
       durationMinutes: 22,
+      xpEarned: 50,
       status: "active"
     },
     {
       id: "chk-098",
-      studentName: "Chloe Nguyen (#87102)",
-      courseCode: "MATH 112-01",
-      lecturer: "Prof. Ross",
+      studentName: "Chloe Nguyen",
+      courseCode: "MATH 112-02",
+      lecturer: "Dr. Carter",
       subject: "trig",
       day: "Monday",
       hourBlock: "10:00",
       checkInTime: "9:56 AM",
       checkOutTime: "10:15 AM",
       durationMinutes: 19,
+      xpEarned: 145,
       status: "completed"
     },
     {
       id: "chk-099",
-      studentName: "Marcus Vance (#89541)",
+      studentName: "Marcus Vance",
       courseCode: "MATH 115-01/02",
       lecturer: "Prof. Alvarez",
       subject: "pre",
@@ -479,11 +568,12 @@ window.MATH_LAB_DEFAULT_DATA = {
       checkInTime: "2:03 PM",
       checkOutTime: "2:25 PM",
       durationMinutes: 22,
+      xpEarned: 160,
       status: "completed"
     },
     {
       id: "chk-100",
-      studentName: "Sofia Patel (#91027)",
+      studentName: "Sofia Patel",
       courseCode: "MATH 161-01",
       lecturer: "Prof. Ross",
       subject: "calc",
@@ -492,6 +582,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       checkInTime: "3:01 PM",
       checkOutTime: "3:20 PM",
       durationMinutes: 19,
+      xpEarned: 145,
       status: "completed"
     }
   ]

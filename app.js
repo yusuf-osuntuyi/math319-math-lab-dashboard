@@ -55,6 +55,15 @@
     if (!Array.isArray(data.attendanceLog)) {
       data.attendanceLog = clone(def.attendanceLog || []);
     }
+    if (!Array.isArray(data.studentProfiles) || data.studentProfiles.length === 0) {
+      data.studentProfiles = clone(def.studentProfiles || []);
+    }
+    // Clean any legacy "(#90214)" ID suffixes from attendanceLog student names so they match studentProfiles
+    data.attendanceLog.forEach(r => {
+      if (typeof r.studentName === "string") {
+        r.studentName = r.studentName.replace(/\s*\(#\d+\)\s*$/, "").trim();
+      }
+    });
     return data;
   }
 
@@ -1386,6 +1395,90 @@
     return Math.round(sum / completed.length);
   }
 
+  function getStudentLevelInfo(xp) {
+    const val = Number(xp) || 0;
+    if (val >= 800) return { level: 4, title: "👑 Math Lab Legend", nextXp: 1200, pct: Math.min(100, Math.round(((val - 800) / 400) * 100)) };
+    if (val >= 450) return { level: 3, title: "⚡ Theorem Master", nextXp: 800, pct: Math.round(((val - 450) / 350) * 100) };
+    if (val >= 200) return { level: 2, title: "📐 Problem Solver", nextXp: 450, pct: Math.round(((val - 200) / 250) * 100) };
+    return { level: 1, title: "🌱 Lab Rookie", nextXp: 200, pct: Math.round((val / 200) * 100) };
+  }
+
+  function findOrCreateStudentProfile(rawName, saveIfNew = false) {
+    const clean = (rawName || "").replace(/\s*\(#\d+\)\s*$/, "").trim();
+    if (!clean) return null;
+    if (!Array.isArray(appData.studentProfiles)) appData.studentProfiles = [];
+    const existing = appData.studentProfiles.find(p => p.name.toLowerCase() === clean.toLowerCase());
+    if (existing) return existing;
+
+    const firstClass = (appData.classSchedule && appData.classSchedule[0]) || {
+      code: "MATH 112-01",
+      subject: "trig",
+      lecturers: ["Prof. Ross"]
+    };
+    const newProfile = {
+      name: clean,
+      courseCode: firstClass.code || "MATH 112-01",
+      subject: firstClass.subject || "trig",
+      lecturer: Array.isArray(firstClass.lecturers) && firstClass.lecturers.length > 0 ? firstClass.lecturers.join(", ") : "Prof. Ross",
+      xp: 100,
+      streak: 1,
+      visits: 1,
+      totalMinutes: 20,
+      badges: ["🌱 New Explorer"]
+    };
+    if (saveIfNew) {
+      appData.studentProfiles.unshift(newProfile);
+    }
+    return newProfile;
+  }
+
+  function renderCheckinProfilePreview(nameVal) {
+    const previewEl = document.getElementById("checkin-profile-preview-card");
+    if (!previewEl) return;
+    const clean = (nameVal || "").trim();
+    const subMap = {};
+    appData.subjects.forEach(s => { subMap[s.id] = s; });
+
+    if (!clean) {
+      previewEl.innerHTML = `
+        <div style="font-size:0.78rem;color:var(--text-secondary);text-align:center;padding:0.2rem 0;">
+          👆 Type a student's name (or tap a student chip above) — their <strong>Course Section, Lecturer, Subject, XP &amp; Streak</strong> load automatically from their Student Profile!
+        </div>
+      `;
+      return;
+    }
+
+    const prof = findOrCreateStudentProfile(clean, false);
+    const isExisting = (appData.studentProfiles || []).some(p => p.name.toLowerCase() === clean.toLowerCase());
+    const lvl = getStudentLevelInfo(prof.xp);
+    const subObj = subMap[prof.subject] || appData.subjects[0];
+    const badgesHtml = (prof.badges || []).map(b => `<span class="badge badge-amber" style="font-size:0.65rem;margin-right:0.25rem;">${b}</span>`).join("");
+
+    previewEl.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;">
+        <div>
+          <div style="font-weight:800;font-size:0.9rem;color:var(--text-primary);">
+            ${prof.name}
+            ${isExisting
+              ? '<span class="badge badge-emerald" style="font-size:0.63rem;margin-left:0.3rem;">✓ Profile Matched</span>'
+              : '<span class="badge badge-blue" style="font-size:0.63rem;margin-left:0.3rem;">+ Auto-Creates Profile</span>'}
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.15rem;">
+            Auto-Tracked: <strong>${prof.courseCode}</strong> &bull; 👨‍🏫 ${prof.lecturer} &bull; <span class="subject-pill" style="background:${subObj.color}">${subObj.short}</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:800;font-size:0.78rem;color:var(--accent-primary);">${lvl.title} (Lvl ${lvl.level})</div>
+          <div style="font-size:0.73rem;color:var(--accent-amber);font-weight:700;">🔥 ${prof.streak}-Visit Streak &bull; ${prof.xp} XP</div>
+        </div>
+      </div>
+      <div style="width:100%;height:7px;background:rgba(148,163,184,0.2);border-radius:99px;overflow:hidden;margin-top:0.35rem;">
+        <div style="width:${lvl.pct}%;height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);border-radius:99px;"></div>
+      </div>
+      <div style="margin-top:0.35rem;">${badgesHtml}</div>
+    `;
+  }
+
   function renderQrCodeToElement(containerId, url, altText) {
     const container = document.getElementById(containerId);
     if (!container) return;
@@ -1497,69 +1590,74 @@
       autoSyncChk.checked = appData.qrConfig ? appData.qrConfig.autoSyncArrivals !== false : true;
     }
 
-    // 3. Populate Course, Subject, and Hour dropdowns in Check-In Kiosk Form
-    const courseSel = document.getElementById("checkin-course-select");
-    const subSel = document.getElementById("checkin-subject-select");
-    const hrSel = document.getElementById("checkin-hour-select");
-
-    if (subSel && subSel.options.length === 0) {
-      subSel.innerHTML = appData.subjects.map(s => `<option value="${s.id}">${s.name} (${s.short})</option>`).join("");
-    }
-    if (hrSel && hrSel.options.length === 0) {
-      hrSel.innerHTML = appData.meta.operatingHours.map(h => `<option value="${h.id}" ${h.id === "10:00" ? "selected" : ""}>${h.label}</option>`).join("");
-    }
-    if (courseSel) {
-      const prevVal = courseSel.value;
-      courseSel.innerHTML = (appData.classSchedule || []).map((c, idx) => {
-        const profs = Array.isArray(c.lecturers) && c.lecturers.length > 0 ? c.lecturers.join(", ") : "Staff";
-        return `<option value="${idx}">${c.code} — ${c.title} (${profs})</option>`;
-      }).join("") + `<option value="other">Other / General Walk-In</option>`;
-      if (prevVal && Array.from(courseSel.options).some(o => o.value === prevVal)) {
-        courseSel.value = prevVal;
-      } else if (appData.classSchedule && appData.classSchedule[0]) {
-        courseSel.value = "0";
-        if (subSel) subSel.value = appData.classSchedule[0].subject;
-        if (hrSel && appData.classSchedule[0].releaseHour) hrSel.value = appData.classSchedule[0].releaseHour;
-      }
+    // 3. Populate Name-Only Datalist, 1-Tap Profile Chips & Live Profile Preview
+    const dl = document.getElementById("student-profile-datalist");
+    if (dl) {
+      dl.innerHTML = (appData.studentProfiles || []).map(p => {
+        const lvl = getStudentLevelInfo(p.xp);
+        return `<option value="${p.name}">${p.courseCode} (${p.lecturer}) — ${lvl.title}</option>`;
+      }).join("");
     }
 
-    // 4. Render Active Students Table (1-Tap Check-Out)
+    const nameInp = document.getElementById("checkin-student-name");
+    const chipsWrap = document.getElementById("checkin-profile-quick-chips");
+    if (chipsWrap) {
+      chipsWrap.innerHTML = (appData.studentProfiles || []).map(p => `
+        <button type="button" class="tutor-chip chip-pick-student-profile" data-name="${p.name.replace(/"/g, '&quot;')}" style="font-size:0.73rem;padding:0.2rem 0.52rem;">
+          <span>🔥 ${p.name}</span>
+        </button>
+      `).join("");
+
+      chipsWrap.querySelectorAll(".chip-pick-student-profile").forEach(btn => {
+        btn.addEventListener("click", e => {
+          const chosen = e.currentTarget.getAttribute("data-name");
+          if (nameInp) {
+            nameInp.value = chosen;
+            nameInp.removeAttribute("aria-invalid");
+          }
+          renderCheckinProfilePreview(chosen);
+        });
+      });
+    }
+    renderCheckinProfilePreview(nameInp ? nameInp.value : "");
+
+    // 4. Render Active Students Table (1-Tap Check-Out with +100 XP)
     const activeWrap = document.getElementById("qr-active-students-wrap");
     if (activeWrap) {
       if (activeList.length === 0) {
         activeWrap.innerHTML = `
           <div style="padding:1.5rem;text-align:center;color:var(--text-secondary);font-size:0.84rem;">
-            No students are currently checked in. Use the <strong>Student Check-In Kiosk</strong> on the left (or click <strong>⚡ Demo +5 Trig Rush</strong>) to check students in!
+            No students are currently checked in. Enter a name on the left (or click <strong>⚡ Demo +5 Trig Rush</strong>) to check students in!
           </div>
         `;
       } else {
         const activeRows = activeList.map(r => {
           const s = subMap[r.subject] || appData.subjects[0];
+          const prof = findOrCreateStudentProfile(r.studentName, false);
+          const lvl = getStudentLevelInfo(prof ? prof.xp : 150);
           return `
             <tr>
               <td>
-                <strong>${r.studentName}</strong><br/>
-                <span style="font-size:0.73rem;color:var(--text-secondary);">${r.day} &bull; Block ${r.hourBlock}</span>
+                <strong>${r.studentName}</strong>
+                <span style="font-size:0.7rem;color:var(--accent-amber);font-weight:700;margin-left:0.25rem;">🔥 ${prof ? prof.streak : 1}</span><br/>
+                <span style="font-size:0.72rem;color:var(--text-secondary);">${lvl.title} &bull; ${r.day} (${r.hourBlock})</span>
               </td>
               <td>
                 <strong>${r.courseCode}</strong><br/>
-                <span style="font-size:0.74rem;color:var(--text-secondary);">👨‍🏫 ${r.lecturer || "Staff"}</span>
+                <span style="font-size:0.73rem;color:var(--text-secondary);">👨‍🏫 ${r.lecturer || "Staff"}</span>
               </td>
               <td>
                 <span class="subject-pill" style="background:${s.color}">${s.short}</span>
               </td>
-              <td style="font-family:'JetBrains Mono',monospace;font-size:0.79rem;">
-                <span style="color:var(--accent-emerald);">In: ${r.checkInTime}</span>
-              </td>
               <td>
-                <div style="display:flex;align-items:center;gap:0.35rem;">
-                  <input type="number" class="num-input qr-active-dur-input" data-id="${r.id}" min="1" max="180" value="${r.durationMinutes || 20}" style="width:58px;" title="Minutes spent in lab (1/mu)" />
-                  <span style="font-size:0.74rem;color:var(--text-secondary);">min</span>
+                <div style="display:flex;align-items:center;gap:0.3rem;">
+                  <input type="number" class="num-input qr-active-dur-input" data-id="${r.id}" min="1" max="180" value="${r.durationMinutes || 20}" style="width:54px;" title="Minutes spent in lab (1/mu)" />
+                  <span style="font-size:0.72rem;color:var(--text-secondary);">min</span>
                 </div>
               </td>
               <td>
-                <button type="button" class="btn btn-primary btn-qr-checkout" data-id="${r.id}" style="padding:0.3rem 0.65rem;font-size:0.76rem;">
-                  👋 Check Out
+                <button type="button" class="btn btn-primary btn-qr-checkout" data-id="${r.id}" style="padding:0.32rem 0.65rem;font-size:0.75rem;font-weight:700;">
+                  👋 Check Out (+100 XP)
                 </button>
               </td>
             </tr>
@@ -1570,12 +1668,11 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Student Name / ID</th>
-                <th>Course &amp; Lecturer</th>
+                <th>Student &amp; Profile Rank</th>
+                <th>Auto-Tracked Course</th>
                 <th>Subject</th>
-                <th>Check-In Time</th>
-                <th>Session Length (1/&mu;)</th>
-                <th>Action</th>
+                <th>Duration (1/&mu;)</th>
+                <th>1-Tap Check-Out</th>
               </tr>
             </thead>
             <tbody>${activeRows}</tbody>
@@ -1592,12 +1689,150 @@
               rec.status = "completed";
               rec.durationMinutes = mins;
               rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-              saveState(`Checked out ${rec.studentName} (${mins} min session recorded)`);
+              rec.xpEarned = (rec.xpEarned || 50) + 100;
+
+              const prof = findOrCreateStudentProfile(rec.studentName, true);
+              if (prof) {
+                prof.xp = (Number(prof.xp) || 0) + 100;
+                prof.totalMinutes = (Number(prof.totalMinutes) || 0) + mins;
+                if (prof.totalMinutes >= 100 && !(prof.badges || []).includes("⏱️ 100+ Min Club")) {
+                  prof.badges.push("⏱️ 100+ Min Club");
+                }
+              }
+              saveState(`🎉 Checked out ${rec.studentName} (+100 XP • ${mins} min session)!`);
               renderQrTab();
             }
           });
         });
       }
+    }
+
+    // 5. Render Gamified Student Profiles & Leaderboard Studio
+    const profilesWrap = document.getElementById("qr-student-profiles-wrap");
+    if (profilesWrap) {
+      const sortedProfiles = (appData.studentProfiles || []).slice().sort((a, b) => (Number(b.xp) || 0) - (Number(a.xp) || 0));
+      const profRows = sortedProfiles.map((p, rankIdx) => {
+        const realIdx = appData.studentProfiles.indexOf(p);
+        const lvl = getStudentLevelInfo(p.xp);
+        const s = subMap[p.subject] || appData.subjects[0];
+        const courseOptions = (appData.classSchedule || []).map(c => {
+          const profName = Array.isArray(c.lecturers) && c.lecturers.length > 0 ? c.lecturers.join(", ") : "Staff";
+          return `<option value="${c.code}" ${c.code === p.courseCode ? "selected" : ""}>${c.code} — ${c.title} (${profName})</option>`;
+        }).join("");
+        const badgesHtml = (p.badges || []).map(b => `<span class="badge badge-amber" style="font-size:0.65rem;margin-right:0.25rem;">${b}</span>`).join("");
+
+        return `
+          <tr>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:800;color:var(--accent-primary);">
+              #${rankIdx + 1}
+            </td>
+            <td style="min-width:165px;">
+              <input type="text" class="text-input edit-student-prof-name" data-idx="${realIdx}" value="${p.name.replace(/"/g, '&quot;')}" style="width:100%;font-weight:700;padding:0.26rem 0.5rem;font-size:0.8rem;" />
+            </td>
+            <td style="min-width:230px;">
+              <select class="text-input edit-student-prof-course" data-idx="${realIdx}" style="width:100%;padding:0.26rem 0.45rem;font-size:0.76rem;">
+                ${courseOptions}
+              </select>
+              <div style="font-size:0.71rem;color:var(--text-secondary);margin-top:0.2rem;">
+                👨‍🏫 Lecturer: <strong>${p.lecturer}</strong> &bull; <span class="subject-pill" style="background:${s.color}">${s.name}</span>
+              </div>
+            </td>
+            <td style="min-width:190px;">
+              <div style="display:flex;justify-content:space-between;font-size:0.76rem;font-weight:700;">
+                <span style="color:var(--accent-primary);">${lvl.title}</span>
+                <span style="font-family:'JetBrains Mono',monospace;">${p.xp} XP</span>
+              </div>
+              <div style="width:100%;height:7px;background:rgba(148,163,184,0.2);border-radius:99px;overflow:hidden;margin-top:0.25rem;">
+                <div style="width:${lvl.pct}%;height:100%;background:linear-gradient(90deg,#10b981,#3b82f6);border-radius:99px;"></div>
+              </div>
+            </td>
+            <td style="font-family:'JetBrains Mono',monospace;font-size:0.79rem;">
+              <span style="color:var(--accent-amber);font-weight:800;">🔥 ${p.streak} streak</span><br/>
+              <span style="font-size:0.72rem;color:var(--text-secondary);">${p.visits} visits &bull; ${p.totalMinutes}m total</span>
+            </td>
+            <td>
+              ${badgesHtml || '<span style="font-size:0.72rem;color:var(--text-muted);">No badges yet</span>'}
+            </td>
+            <td>
+              <div style="display:flex;gap:0.3rem;">
+                <button type="button" class="btn btn-emerald btn-quick-checkin-profile" data-name="${p.name.replace(/"/g, '&quot;')}" title="1-Click Check In this student" style="padding:0.22rem 0.5rem;font-size:0.72rem;">
+                  ✅ Check In
+                </button>
+                <button type="button" class="btn btn-delete-student-profile" data-idx="${realIdx}" title="Remove student profile" style="padding:0.22rem 0.45rem;font-size:0.72rem;color:var(--accent-rose);">
+                  ✕
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+
+      profilesWrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Student Name</th>
+              <th>Default Course &amp; Lecturer (Auto-Used at QR Scan)</th>
+              <th>Gamified Level &amp; XP Progress</th>
+              <th>Visit Streak &amp; Time</th>
+              <th>Earned Badges</th>
+              <th>Quick Actions</th>
+            </tr>
+          </thead>
+          <tbody>${profRows}</tbody>
+        </table>
+      `;
+
+      profilesWrap.querySelectorAll(".edit-student-prof-name").forEach(inp => {
+        inp.addEventListener("change", e => {
+          const idx = Number(e.target.getAttribute("data-idx"));
+          const newName = e.target.value.trim();
+          if (newName && appData.studentProfiles[idx]) {
+            appData.studentProfiles[idx].name = newName;
+            saveState(`Updated student profile name to ${newName}`);
+            renderQrTab();
+          }
+        });
+      });
+
+      profilesWrap.querySelectorAll(".edit-student-prof-course").forEach(sel => {
+        sel.addEventListener("change", e => {
+          const idx = Number(e.target.getAttribute("data-idx"));
+          const code = e.target.value;
+          const matched = (appData.classSchedule || []).find(c => c.code === code);
+          if (matched && appData.studentProfiles[idx]) {
+            appData.studentProfiles[idx].courseCode = matched.code;
+            appData.studentProfiles[idx].subject = matched.subject;
+            appData.studentProfiles[idx].lecturer = Array.isArray(matched.lecturers) ? matched.lecturers.join(", ") : "Staff";
+            saveState(`Linked ${appData.studentProfiles[idx].name} profile to ${matched.code} (${appData.studentProfiles[idx].lecturer})`);
+            renderQrTab();
+          }
+        });
+      });
+
+      profilesWrap.querySelectorAll(".btn-quick-checkin-profile").forEach(btn => {
+        btn.addEventListener("click", e => {
+          const chosen = e.currentTarget.getAttribute("data-name");
+          if (nameInp) {
+            nameInp.value = chosen;
+            nameInp.removeAttribute("aria-invalid");
+          }
+          const formEl = document.getElementById("qr-checkin-form");
+          if (formEl) formEl.requestSubmit();
+        });
+      });
+
+      profilesWrap.querySelectorAll(".btn-delete-student-profile").forEach(btn => {
+        btn.addEventListener("click", e => {
+          const idx = Number(e.currentTarget.getAttribute("data-idx"));
+          const removed = appData.studentProfiles.splice(idx, 1)[0];
+          if (removed) {
+            saveState(`Removed student profile: ${removed.name}`);
+            renderQrTab();
+          }
+        });
+      });
     }
 
     // 5. Render Completed Check-In / Check-Out History Table
@@ -2055,25 +2290,10 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     });
 
     // ========================================================================
-    // QR CODE CHECK-IN / CHECK-OUT KIOSK LISTENERS & VALIDATION
+    // QR CODE CHECK-IN / CHECK-OUT KIOSK LISTENERS (NAME-ONLY + PROFILES)
     // ========================================================================
     const qrForm = document.getElementById("qr-checkin-form");
     const qrNameInput = document.getElementById("checkin-student-name");
-    const qrCourseSel = document.getElementById("checkin-course-select");
-    const qrSubSel = document.getElementById("checkin-subject-select");
-    const qrDaySel = document.getElementById("checkin-day-select");
-    const qrHrSel = document.getElementById("checkin-hour-select");
-
-    if (qrCourseSel) {
-      qrCourseSel.addEventListener("change", () => {
-        const val = qrCourseSel.value;
-        if (val !== "other" && appData.classSchedule && appData.classSchedule[Number(val)]) {
-          const c = appData.classSchedule[Number(val)];
-          if (qrSubSel) qrSubSel.value = c.subject;
-          if (qrHrSel && c.releaseHour) qrHrSel.value = c.releaseHour;
-        }
-      });
-    }
 
     if (qrForm && qrNameInput) {
       const syncAriaInvalid = (input) => {
@@ -2088,39 +2308,49 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         if (e.target.matches("input[required]")) syncAriaInvalid(e.target);
       }, true);
 
-      qrForm.addEventListener("input", e => {
-        if (e.target.matches("input[required]") && e.target.checkValidity()) {
-          e.target.removeAttribute("aria-invalid");
+      qrNameInput.addEventListener("input", () => {
+        if (qrNameInput.checkValidity()) {
+          qrNameInput.removeAttribute("aria-invalid");
         }
+        renderCheckinProfilePreview(qrNameInput.value);
       });
 
       qrForm.addEventListener("submit", e => {
         e.preventDefault();
-        syncAriaInvalid(qrNameInput);
-        if (!qrForm.checkValidity()) {
+        const rawName = (qrNameInput.value || "").trim();
+        if (!rawName) {
+          qrNameInput.setAttribute("aria-invalid", "true");
           qrNameInput.focus();
           return;
         }
 
-        const cVal = qrCourseSel ? qrCourseSel.value : "other";
-        const courseObj = (cVal !== "other" && appData.classSchedule[Number(cVal)]) ? appData.classSchedule[Number(cVal)] : null;
-        const day = qrDaySel ? qrDaySel.value : "Monday";
-        const hr = qrHrSel ? qrHrSel.value : "10:00";
-        const sub = qrSubSel ? qrSubSel.value : "trig";
+        const prof = findOrCreateStudentProfile(rawName, true);
+        prof.xp = (Number(prof.xp) || 0) + 50;
+        prof.streak = (Number(prof.streak) || 0) + 1;
+        prof.visits = (Number(prof.visits) || 0) + 1;
+        if (prof.streak >= 3 && !(prof.badges || []).some(b => b.includes("Streak"))) {
+          prof.badges.push(`🔥 ${prof.streak}-Day Streak`);
+        }
+
+        const matchedCourse = (appData.classSchedule || []).find(c => c.code === prof.courseCode);
+        const day = "Monday";
+        const hr = (matchedCourse && matchedCourse.releaseHour) ? matchedCourse.releaseHour : "10:00";
+        const sub = prof.subject || "trig";
         const autoSync = document.getElementById("checkin-autosync-toggle") ? document.getElementById("checkin-autosync-toggle").checked : true;
         const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         const newRec = {
           id: "chk-" + Date.now(),
-          studentName: qrNameInput.value.trim(),
-          courseCode: courseObj ? courseObj.code : "General Walk-In",
-          lecturer: courseObj && Array.isArray(courseObj.lecturers) ? courseObj.lecturers.join(", ") : "Dept. Faculty",
+          studentName: prof.name,
+          courseCode: prof.courseCode,
+          lecturer: prof.lecturer,
           subject: sub,
           day: day,
           hourBlock: hr,
           checkInTime: nowStr,
           checkOutTime: null,
           durationMinutes: appData.parameters.avgSessionMinutes || 20,
+          xpEarned: 50,
           status: "active"
         };
 
@@ -2131,8 +2361,35 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
 
         qrNameInput.value = "";
         qrNameInput.removeAttribute("aria-invalid");
-        saveState(`Checked in ${newRec.studentName} (${newRec.courseCode} • ${newRec.lecturer})`);
+        saveState(`🎉 Checked in ${prof.name}! +50 XP & 🔥 ${prof.streak}-Visit Streak (${prof.courseCode} • ${prof.lecturer})`);
         renderAll(true);
+      });
+    }
+
+    // Add New Student Profile button
+    const btnAddStudentProfile = document.getElementById("btn-add-student-profile");
+    if (btnAddStudentProfile) {
+      btnAddStudentProfile.addEventListener("click", () => {
+        const firstClass = (appData.classSchedule && appData.classSchedule[0]) || {
+          code: "MATH 112-01",
+          subject: "trig",
+          lecturers: ["Prof. Ross"]
+        };
+        const nextIdx = (appData.studentProfiles || []).length + 1;
+        const newProf = {
+          name: `Student ${nextIdx}`,
+          courseCode: firstClass.code || "MATH 112-01",
+          subject: firstClass.subject || "trig",
+          lecturer: Array.isArray(firstClass.lecturers) ? firstClass.lecturers.join(", ") : "Prof. Ross",
+          xp: 150,
+          streak: 1,
+          visits: 1,
+          totalMinutes: 20,
+          badges: ["🌱 New Explorer"]
+        };
+        appData.studentProfiles.unshift(newProf);
+        saveState(`Added new student profile: ${newProf.name}`);
+        renderQrTab();
       });
     }
 
@@ -2141,30 +2398,33 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     if (btnSimTrigWave) {
       btnSimTrigWave.addEventListener("click", () => {
         const sampleNames = [
-          "Liam O'Connor (#90512)",
-          "Zara Al-Mansoor (#90644)",
-          "Noah Takahashi (#90719)",
-          "Maya Robinson (#90803)",
-          "Caleb Wright (#90915)"
+          "Liam O'Connor",
+          "Zara Al-Mansoor",
+          "Noah Takahashi",
+          "Maya Robinson",
+          "Caleb Wright"
         ];
-        const trigClass = appData.classSchedule.find(c => c.subject === "trig") || appData.classSchedule[0];
-        const code = trigClass ? trigClass.code : "MATH 112-01";
-        const prof = trigClass && Array.isArray(trigClass.lecturers) ? trigClass.lecturers.join(", ") : "Prof. Ross";
-        const day = qrDaySel ? qrDaySel.value : "Monday";
+        const day = "Monday";
         const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         sampleNames.forEach((sName, i) => {
+          const prof = findOrCreateStudentProfile(sName, true);
+          prof.xp = (Number(prof.xp) || 0) + 50;
+          prof.streak = (Number(prof.streak) || 0) + 1;
+          prof.visits = (Number(prof.visits) || 0) + 1;
+
           appData.attendanceLog.unshift({
             id: "chk-" + Date.now() + "-" + i,
-            studentName: sName,
-            courseCode: code,
-            lecturer: prof,
-            subject: "trig",
+            studentName: prof.name,
+            courseCode: prof.courseCode,
+            lecturer: prof.lecturer,
+            subject: prof.subject,
             day: day,
             hourBlock: "10:00",
             checkInTime: nowStr,
             checkOutTime: null,
             durationMinutes: 18 + (i % 5),
+            xpEarned: 50,
             status: "active"
           });
         });
@@ -2172,7 +2432,7 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         if (appData.hourlyArrivals[day] && appData.hourlyArrivals[day]["10:00"]) {
           appData.hourlyArrivals[day]["10:00"].trig = (Number(appData.hourlyArrivals[day]["10:00"].trig) || 0) + 5;
         }
-        saveState(`Simulated +5 Trigonometry QR Check-Ins at 10:00 AM (${code} • ${prof})!`);
+        saveState(`⚡ Simulated +5 Student Profile Check-Ins at 10:00 AM (+50 XP each)!`);
         renderAll(true);
       });
     }
