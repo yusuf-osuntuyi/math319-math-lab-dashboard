@@ -402,5 +402,96 @@ window.MATH_LAB_DEFAULT_DATA = {
       "15:00": ["ga-3", "ga-6", "ug-mariah"],
       "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6"]
     }
-  }
+  },
+
+  // --------------------------------------------------------------------------
+  // 7. QR CODE CHECK-IN / CHECK-OUT LOG (Tracks Who Comes In & Session Duration)
+  //    Each record tracks student ID/name, course section, lecturer, subject,
+  //    day, hour block, check-in time, check-out time, and durationMinutes (1/mu).
+  // --------------------------------------------------------------------------
+  qrConfig: {
+    targetUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html",
+    autoSyncArrivals: true
+  },
+
+  attendanceLog: [
+    {
+      id: "chk-101",
+      studentName: "Jordan Miles (#90214)",
+      courseCode: "MATH 112-01",
+      lecturer: "Prof. Ross",
+      subject: "trig",
+      day: "Monday",
+      hourBlock: "10:00",
+      checkInTime: "10:02 AM",
+      checkOutTime: null,
+      durationMinutes: 18,
+      status: "active"
+    },
+    {
+      id: "chk-102",
+      studentName: "Amina Bello (#90488)",
+      courseCode: "MATH 112-01",
+      lecturer: "Prof. Ross",
+      subject: "trig",
+      day: "Monday",
+      hourBlock: "10:00",
+      checkInTime: "10:05 AM",
+      checkOutTime: null,
+      durationMinutes: 15,
+      status: "active"
+    },
+    {
+      id: "chk-103",
+      studentName: "Devon Brooks (#88319)",
+      courseCode: "MATH 111-01/02",
+      lecturer: "Prof. Reynolds",
+      subject: "alg",
+      day: "Monday",
+      hourBlock: "13:00",
+      checkInTime: "1:04 PM",
+      checkOutTime: null,
+      durationMinutes: 22,
+      status: "active"
+    },
+    {
+      id: "chk-098",
+      studentName: "Chloe Nguyen (#87102)",
+      courseCode: "MATH 112-01",
+      lecturer: "Prof. Ross",
+      subject: "trig",
+      day: "Monday",
+      hourBlock: "10:00",
+      checkInTime: "9:56 AM",
+      checkOutTime: "10:15 AM",
+      durationMinutes: 19,
+      status: "completed"
+    },
+    {
+      id: "chk-099",
+      studentName: "Marcus Vance (#89541)",
+      courseCode: "MATH 115-01/02",
+      lecturer: "Prof. Alvarez",
+      subject: "pre",
+      day: "Monday",
+      hourBlock: "14:00",
+      checkInTime: "2:03 PM",
+      checkOutTime: "2:25 PM",
+      durationMinutes: 22,
+      status: "completed"
+    },
+    {
+      id: "chk-100",
+      studentName: "Sofia Patel (#91027)",
+      courseCode: "MATH 161-01",
+      lecturer: "Prof. Ross",
+      subject: "calc",
+      day: "Tuesday",
+      hourBlock: "15:00",
+      checkInTime: "3:01 PM",
+      checkOutTime: "3:20 PM",
+      durationMinutes: 19,
+      status: "completed"
+    }
+  ]
 };

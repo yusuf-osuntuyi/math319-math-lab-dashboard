@@ -39,6 +39,15 @@
         c.walkIns = Math.round(((c.enrolled || 0) * (c.expectedLabCapturePct || 10)) / 100);
       }
     });
+    if (!data.qrConfig || typeof data.qrConfig !== "object") {
+      data.qrConfig = clone(def.qrConfig || {
+        targetUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html",
+        autoSyncArrivals: true
+      });
+    }
+    if (!Array.isArray(data.attendanceLog)) {
+      data.attendanceLog = clone(def.attendanceLog || []);
+    }
     return data;
   }
 
@@ -113,6 +122,7 @@
     renderScheduleTab();
     renderModelsTab();
     renderEditorTab();
+    renderQrTab();
   }
 
   function renderHeaderMeta() {
@@ -1360,6 +1370,285 @@
   }
 
   // ==========================================================================
+  // TAB 5: QR CODE CHECK-IN / CHECK-OUT KIOSK & LIVE ATTENDANCE TRACKER
+  // ==========================================================================
+  function getMeasuredAvgSessionMinutes() {
+    const completed = (appData.attendanceLog || []).filter(r => r.status === "completed" && Number(r.durationMinutes) > 0);
+    if (completed.length === 0) return appData.parameters.avgSessionMinutes || 20;
+    const sum = completed.reduce((acc, r) => acc + Number(r.durationMinutes), 0);
+    return Math.round(sum / completed.length);
+  }
+
+  function renderQrCodeGraphic(url) {
+    const container = document.getElementById("qr-code-container");
+    if (!container) return;
+    const safeUrl = (url || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html").trim();
+    if (typeof qrcode === "function") {
+      try {
+        const qr = qrcode(0, "M");
+        qr.addData(safeUrl);
+        qr.make();
+        container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+        const svgEl = container.querySelector("svg");
+        if (svgEl) {
+          svgEl.setAttribute("width", "180");
+          svgEl.setAttribute("height", "180");
+        }
+        return;
+      } catch (err) {
+        console.warn("SVG QR fallback:", err);
+      }
+    }
+    container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(safeUrl)}" alt="Math Lab Check-In QR Code" width="180" height="180" />`;
+  }
+
+  function renderQrTab() {
+    const log = appData.attendanceLog || [];
+    const activeList = log.filter(r => r.status === "active");
+    const completedList = log.filter(r => r.status === "completed");
+    const measuredMuMin = getMeasuredAvgSessionMinutes();
+    const measuredRatePerHr = (60 / Math.max(1, measuredMuMin)).toFixed(2);
+
+    const subMap = {};
+    appData.subjects.forEach(s => { subMap[s.id] = s; });
+
+    // Find top course/lecturer in log
+    const courseCounts = {};
+    log.forEach(r => {
+      const key = `${r.courseCode} (${r.lecturer || "Staff"})`;
+      courseCounts[key] = (courseCounts[key] || 0) + 1;
+    });
+    const topCourseEntry = Object.entries(courseCounts).sort((a, b) => b[1] - a[1])[0];
+    const topCourseLabel = topCourseEntry ? topCourseEntry[0] : "MATH 112-01 (Prof. Ross)";
+    const topCourseVisits = topCourseEntry ? topCourseEntry[1] : 0;
+
+    // 1. Render Top 4 QR KPI Cards
+    const kpiGrid = document.getElementById("qr-kpi-grid");
+    if (kpiGrid) {
+      kpiGrid.innerHTML = `
+        <div class="kpi-card">
+          <div class="kpi-label">Students Currently in Lab</div>
+          <div class="kpi-main">
+            <span class="kpi-value" style="color:var(--accent-emerald);">${activeList.length}</span>
+            <span class="kpi-unit">checked in now</span>
+          </div>
+          <div class="kpi-compare">
+            <span class="delta-good">${log.length} total QR scans</span> logged in tracker
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Measured Session Duration (1/&mu;)</div>
+          <div class="kpi-main">
+            <span class="kpi-value" style="color:var(--accent-primary);">${measuredMuMin}</span>
+            <span class="kpi-unit">min avg</span>
+          </div>
+          <div class="kpi-compare">
+            &mu; = <strong>${measuredRatePerHr} students/hr</strong> per tutor (Model slider: ${appData.parameters.avgSessionMinutes}m)
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Completed Check-Out Sessions</div>
+          <div class="kpi-main">
+            <span class="kpi-value">${completedList.length}</span>
+            <span class="kpi-unit">verified visits</span>
+          </div>
+          <div class="kpi-compare">
+            Captures exact <strong>Check-In &rarr; Check-Out</strong> dwell time
+          </div>
+        </div>
+
+        <div class="kpi-card">
+          <div class="kpi-label">Top Course &amp; Lecturer Traffic Driver</div>
+          <div class="kpi-main">
+            <span class="kpi-value" style="font-size:1.05rem;">${topCourseLabel}</span>
+          </div>
+          <div class="kpi-compare">
+            <span class="delta-good">${topCourseVisits} check-ins</span> linked to lecture release
+          </div>
+        </div>
+      `;
+    }
+
+    // 2. Render QR Code Graphic & Target URL input
+    const targetUrl = (appData.qrConfig && appData.qrConfig.targetUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html";
+    renderQrCodeGraphic(targetUrl);
+    const urlInput = document.getElementById("qr-target-url-input");
+    if (urlInput && document.activeElement !== urlInput) {
+      urlInput.value = targetUrl;
+    }
+    const autoSyncChk = document.getElementById("checkin-autosync-toggle");
+    if (autoSyncChk) {
+      autoSyncChk.checked = appData.qrConfig ? appData.qrConfig.autoSyncArrivals !== false : true;
+    }
+
+    // 3. Populate Course, Subject, and Hour dropdowns in Check-In Kiosk Form
+    const courseSel = document.getElementById("checkin-course-select");
+    const subSel = document.getElementById("checkin-subject-select");
+    const hrSel = document.getElementById("checkin-hour-select");
+
+    if (subSel && subSel.options.length === 0) {
+      subSel.innerHTML = appData.subjects.map(s => `<option value="${s.id}">${s.name} (${s.short})</option>`).join("");
+    }
+    if (hrSel && hrSel.options.length === 0) {
+      hrSel.innerHTML = appData.meta.operatingHours.map(h => `<option value="${h.id}" ${h.id === "10:00" ? "selected" : ""}>${h.label}</option>`).join("");
+    }
+    if (courseSel) {
+      const prevVal = courseSel.value;
+      courseSel.innerHTML = (appData.classSchedule || []).map((c, idx) => {
+        const profs = Array.isArray(c.lecturers) && c.lecturers.length > 0 ? c.lecturers.join(", ") : "Staff";
+        return `<option value="${idx}">${c.code} — ${c.title} (${profs})</option>`;
+      }).join("") + `<option value="other">Other / General Walk-In</option>`;
+      if (prevVal && Array.from(courseSel.options).some(o => o.value === prevVal)) {
+        courseSel.value = prevVal;
+      } else if (appData.classSchedule && appData.classSchedule[0]) {
+        courseSel.value = "0";
+        if (subSel) subSel.value = appData.classSchedule[0].subject;
+        if (hrSel && appData.classSchedule[0].releaseHour) hrSel.value = appData.classSchedule[0].releaseHour;
+      }
+    }
+
+    // 4. Render Active Students Table (1-Tap Check-Out)
+    const activeWrap = document.getElementById("qr-active-students-wrap");
+    if (activeWrap) {
+      if (activeList.length === 0) {
+        activeWrap.innerHTML = `
+          <div style="padding:1.5rem;text-align:center;color:var(--text-secondary);font-size:0.84rem;">
+            No students are currently checked in. Use the <strong>Student Check-In Kiosk</strong> on the left (or click <strong>⚡ Demo +5 Trig Rush</strong>) to check students in!
+          </div>
+        `;
+      } else {
+        const activeRows = activeList.map(r => {
+          const s = subMap[r.subject] || appData.subjects[0];
+          return `
+            <tr>
+              <td>
+                <strong>${r.studentName}</strong><br/>
+                <span style="font-size:0.73rem;color:var(--text-secondary);">${r.day} &bull; Block ${r.hourBlock}</span>
+              </td>
+              <td>
+                <strong>${r.courseCode}</strong><br/>
+                <span style="font-size:0.74rem;color:var(--text-secondary);">👨‍🏫 ${r.lecturer || "Staff"}</span>
+              </td>
+              <td>
+                <span class="subject-pill" style="background:${s.color}">${s.short}</span>
+              </td>
+              <td style="font-family:'JetBrains Mono',monospace;font-size:0.79rem;">
+                <span style="color:var(--accent-emerald);">In: ${r.checkInTime}</span>
+              </td>
+              <td>
+                <div style="display:flex;align-items:center;gap:0.35rem;">
+                  <input type="number" class="num-input qr-active-dur-input" data-id="${r.id}" min="1" max="180" value="${r.durationMinutes || 20}" style="width:58px;" title="Minutes spent in lab (1/mu)" />
+                  <span style="font-size:0.74rem;color:var(--text-secondary);">min</span>
+                </div>
+              </td>
+              <td>
+                <button type="button" class="btn btn-primary btn-qr-checkout" data-id="${r.id}" style="padding:0.3rem 0.65rem;font-size:0.76rem;">
+                  👋 Check Out
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        activeWrap.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student Name / ID</th>
+                <th>Course &amp; Lecturer</th>
+                <th>Subject</th>
+                <th>Check-In Time</th>
+                <th>Session Length (1/&mu;)</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>${activeRows}</tbody>
+          </table>
+        `;
+
+        activeWrap.querySelectorAll(".btn-qr-checkout").forEach(btn => {
+          btn.addEventListener("click", e => {
+            const id = e.currentTarget.getAttribute("data-id");
+            const durInp = activeWrap.querySelector(`.qr-active-dur-input[data-id="${id}"]`);
+            const mins = durInp ? Math.max(1, parseInt(durInp.value, 10) || 20) : 20;
+            const rec = appData.attendanceLog.find(x => x.id === id);
+            if (rec) {
+              rec.status = "completed";
+              rec.durationMinutes = mins;
+              rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+              saveState(`Checked out ${rec.studentName} (${mins} min session recorded)`);
+              renderQrTab();
+            }
+          });
+        });
+      }
+    }
+
+    // 5. Render Completed Check-In / Check-Out History Table
+    const completedWrap = document.getElementById("qr-completed-log-wrap");
+    if (completedWrap) {
+      if (completedList.length === 0) {
+        completedWrap.innerHTML = `
+          <div style="padding:1.25rem;text-align:center;color:var(--text-secondary);font-size:0.83rem;">
+            No completed check-out sessions yet. Click <strong>👋 Check Out</strong> on an active student above to log their session duration.
+          </div>
+        `;
+      } else {
+        const compRows = completedList.map(r => {
+          const s = subMap[r.subject] || appData.subjects[0];
+          return `
+            <tr>
+              <td><strong>${r.studentName}</strong></td>
+              <td><strong>${r.courseCode}</strong></td>
+              <td>👨‍🏫 ${r.lecturer || "Staff"}</td>
+              <td><span class="subject-pill" style="background:${s.color}">${s.name}</span></td>
+              <td>${r.day} (${r.hourBlock})</td>
+              <td style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;">
+                ${r.checkInTime} &rarr; <strong>${r.checkOutTime || "Done"}</strong>
+              </td>
+              <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-primary);">
+                ${r.durationMinutes} min
+              </td>
+              <td>
+                <button type="button" class="btn btn-delete-qr-rec" data-id="${r.id}" style="padding:0.2rem 0.45rem;font-size:0.74rem;color:var(--accent-rose);">✕</button>
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        completedWrap.innerHTML = `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Student Name / ID</th>
+                <th>Course Section</th>
+                <th>Lecturer</th>
+                <th>Subject</th>
+                <th>Day &amp; Hour Block</th>
+                <th>Check-In &rarr; Check-Out</th>
+                <th>Measured Duration (1/&mu;)</th>
+                <th>Remove</th>
+              </tr>
+            </thead>
+            <tbody>${compRows}</tbody>
+          </table>
+        `;
+
+        completedWrap.querySelectorAll(".btn-delete-qr-rec").forEach(btn => {
+          btn.addEventListener("click", e => {
+            const id = e.currentTarget.getAttribute("data-id");
+            appData.attendanceLog = appData.attendanceLog.filter(x => x.id !== id);
+            saveState("Removed attendance log entry");
+            renderQrTab();
+          });
+        });
+      }
+    }
+  }
+
+  // ==========================================================================
   // FILE EXPORT & EXCEL/CSV/JSON IMPORT HANDLERS
   // ==========================================================================
   function downloadUpdatedDataJs() {
@@ -1444,8 +1733,48 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     }));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(classDriverRows), "Class_Release_Drivers");
 
+    // Sheet 4: QR Check-In / Check-Out Attendance Log
+    const qrLogRows = (appData.attendanceLog || []).map(r => ({
+      Record_ID: r.id,
+      Student_Name_ID: r.studentName,
+      Course_Section: r.courseCode,
+      Lecturer: r.lecturer || "Staff",
+      Subject: r.subject,
+      Day: r.day,
+      Hour_Block: r.hourBlock,
+      Check_In_Time: r.checkInTime,
+      Check_Out_Time: r.checkOutTime || "In Lab (Active)",
+      Duration_Minutes: r.durationMinutes,
+      Status: r.status
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qrLogRows), "QR_Attendance_Log");
+
     XLSX.writeFile(wb, "Math319_Math_Lab_Optimization_Report.xlsx");
     showToast("Exported Excel report (.xlsx)!");
+  }
+
+  function exportQrAttendanceExcel() {
+    if (typeof XLSX === "undefined") {
+      showToast("SheetJS library not loaded");
+      return;
+    }
+    const wb = XLSX.utils.book_new();
+    const qrLogRows = (appData.attendanceLog || []).map(r => ({
+      Record_ID: r.id,
+      Student_Name_ID: r.studentName,
+      Course_Section: r.courseCode,
+      Lecturer: r.lecturer || "Staff",
+      Subject: r.subject,
+      Day: r.day,
+      Hour_Block: r.hourBlock,
+      Check_In_Time: r.checkInTime,
+      Check_Out_Time: r.checkOutTime || "In Lab (Active)",
+      Duration_Minutes: r.durationMinutes,
+      Status: r.status
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qrLogRows), "QR_Attendance_Log");
+    XLSX.writeFile(wb, "Math319_QR_CheckIn_Attendance_Log.xlsx");
+    showToast("Exported QR Check-In / Check-Out Log (.xlsx)!");
   }
 
   function handleFileUpload(file) {
@@ -1709,6 +2038,226 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
       syncSlidersToUI();
       renderAll(true);
       showToast("Reset all data & schedules to baseline!");
+    });
+
+    // ========================================================================
+    // QR CODE CHECK-IN / CHECK-OUT KIOSK LISTENERS & VALIDATION
+    // ========================================================================
+    const qrForm = document.getElementById("qr-checkin-form");
+    const qrNameInput = document.getElementById("checkin-student-name");
+    const qrCourseSel = document.getElementById("checkin-course-select");
+    const qrSubSel = document.getElementById("checkin-subject-select");
+    const qrDaySel = document.getElementById("checkin-day-select");
+    const qrHrSel = document.getElementById("checkin-hour-select");
+
+    if (qrCourseSel) {
+      qrCourseSel.addEventListener("change", () => {
+        const val = qrCourseSel.value;
+        if (val !== "other" && appData.classSchedule && appData.classSchedule[Number(val)]) {
+          const c = appData.classSchedule[Number(val)];
+          if (qrSubSel) qrSubSel.value = c.subject;
+          if (qrHrSel && c.releaseHour) qrHrSel.value = c.releaseHour;
+        }
+      });
+    }
+
+    if (qrForm && qrNameInput) {
+      const syncAriaInvalid = (input) => {
+        if (!input.checkValidity()) {
+          input.setAttribute("aria-invalid", "true");
+        } else {
+          input.removeAttribute("aria-invalid");
+        }
+      };
+
+      qrForm.addEventListener("blur", e => {
+        if (e.target.matches("input[required]")) syncAriaInvalid(e.target);
+      }, true);
+
+      qrForm.addEventListener("input", e => {
+        if (e.target.matches("input[required]") && e.target.checkValidity()) {
+          e.target.removeAttribute("aria-invalid");
+        }
+      });
+
+      qrForm.addEventListener("submit", e => {
+        e.preventDefault();
+        syncAriaInvalid(qrNameInput);
+        if (!qrForm.checkValidity()) {
+          qrNameInput.focus();
+          return;
+        }
+
+        const cVal = qrCourseSel ? qrCourseSel.value : "other";
+        const courseObj = (cVal !== "other" && appData.classSchedule[Number(cVal)]) ? appData.classSchedule[Number(cVal)] : null;
+        const day = qrDaySel ? qrDaySel.value : "Monday";
+        const hr = qrHrSel ? qrHrSel.value : "10:00";
+        const sub = qrSubSel ? qrSubSel.value : "trig";
+        const autoSync = document.getElementById("checkin-autosync-toggle") ? document.getElementById("checkin-autosync-toggle").checked : true;
+        const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        const newRec = {
+          id: "chk-" + Date.now(),
+          studentName: qrNameInput.value.trim(),
+          courseCode: courseObj ? courseObj.code : "General Walk-In",
+          lecturer: courseObj && Array.isArray(courseObj.lecturers) ? courseObj.lecturers.join(", ") : "Dept. Faculty",
+          subject: sub,
+          day: day,
+          hourBlock: hr,
+          checkInTime: nowStr,
+          checkOutTime: null,
+          durationMinutes: appData.parameters.avgSessionMinutes || 20,
+          status: "active"
+        };
+
+        appData.attendanceLog.unshift(newRec);
+        if (autoSync && appData.hourlyArrivals[day] && appData.hourlyArrivals[day][hr]) {
+          appData.hourlyArrivals[day][hr][sub] = (Number(appData.hourlyArrivals[day][hr][sub]) || 0) + 1;
+        }
+
+        qrNameInput.value = "";
+        qrNameInput.removeAttribute("aria-invalid");
+        saveState(`Checked in ${newRec.studentName} (${newRec.courseCode} • ${newRec.lecturer})`);
+        renderAll(true);
+      });
+    }
+
+    // Demo +5 Trig Rush button
+    const btnSimTrigWave = document.getElementById("btn-sim-trig-wave");
+    if (btnSimTrigWave) {
+      btnSimTrigWave.addEventListener("click", () => {
+        const sampleNames = [
+          "Liam O'Connor (#90512)",
+          "Zara Al-Mansoor (#90644)",
+          "Noah Takahashi (#90719)",
+          "Maya Robinson (#90803)",
+          "Caleb Wright (#90915)"
+        ];
+        const trigClass = appData.classSchedule.find(c => c.subject === "trig") || appData.classSchedule[0];
+        const code = trigClass ? trigClass.code : "MATH 112-01";
+        const prof = trigClass && Array.isArray(trigClass.lecturers) ? trigClass.lecturers.join(", ") : "Prof. Ross";
+        const day = qrDaySel ? qrDaySel.value : "Monday";
+        const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        sampleNames.forEach((sName, i) => {
+          appData.attendanceLog.unshift({
+            id: "chk-" + Date.now() + "-" + i,
+            studentName: sName,
+            courseCode: code,
+            lecturer: prof,
+            subject: "trig",
+            day: day,
+            hourBlock: "10:00",
+            checkInTime: nowStr,
+            checkOutTime: null,
+            durationMinutes: 18 + (i % 5),
+            status: "active"
+          });
+        });
+
+        if (appData.hourlyArrivals[day] && appData.hourlyArrivals[day]["10:00"]) {
+          appData.hourlyArrivals[day]["10:00"].trig = (Number(appData.hourlyArrivals[day]["10:00"].trig) || 0) + 5;
+        }
+        saveState(`Simulated +5 Trigonometry QR Check-Ins at 10:00 AM (${code} • ${prof})!`);
+        renderAll(true);
+      });
+    }
+
+    // Sync Measured 1/mu to Model button
+    const btnApplyMeasuredMu = document.getElementById("btn-apply-measured-mu");
+    if (btnApplyMeasuredMu) {
+      btnApplyMeasuredMu.addEventListener("click", () => {
+        const measured = Math.min(35, Math.max(12, getMeasuredAvgSessionMinutes()));
+        appData.parameters.avgSessionMinutes = measured;
+        syncSlidersToUI();
+        saveState(`Synced model Session Length (1/μ) to measured QR average: ${measured} min!`);
+        renderAll(true);
+      });
+    }
+
+    // Update QR Target URL
+    const btnUpdateQrUrl = document.getElementById("btn-update-qr-url");
+    if (btnUpdateQrUrl) {
+      btnUpdateQrUrl.addEventListener("click", () => {
+        const urlInp = document.getElementById("qr-target-url-input");
+        if (urlInp && urlInp.value.trim()) {
+          appData.qrConfig.targetUrl = urlInp.value.trim();
+          saveState("Updated QR Code target URL!");
+          renderQrTab();
+        }
+      });
+    }
+
+    // Print QR Door Poster button
+    const btnPrintQr = document.getElementById("btn-print-qr-poster");
+    if (btnPrintQr) {
+      btnPrintQr.addEventListener("click", () => {
+        const qrContainer = document.getElementById("qr-code-container");
+        const qrHtml = qrContainer ? qrContainer.innerHTML : "";
+        const url = (appData.qrConfig && appData.qrConfig.targetUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html";
+        const win = window.open("", "_blank", "width=620,height=760");
+        if (win) {
+          win.document.write(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <title>Math Lab QR Check-In Poster</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; text-align: center; padding: 2.5rem; color: #0f172a; }
+                .poster { border: 4px solid #1d4ed8; border-radius: 16px; padding: 2.5rem 2rem; max-width: 460px; margin: 0 auto; }
+                .badge { background: #dbeafe; color: #1d4ed8; font-weight: 800; padding: 0.35rem 0.9rem; border-radius: 99px; font-size: 0.85rem; display: inline-block; }
+                h1 { font-size: 1.9rem; margin: 0.8rem 0 0.4rem; }
+                p { color: #475569; font-size: 1rem; line-height: 1.5; }
+                .qr-wrap { margin: 1.5rem auto; display: inline-block; padding: 1rem; border: 2px dashed #93c5fd; border-radius: 12px; }
+                .qr-wrap svg, .qr-wrap img { width: 240px !important; height: 240px !important; }
+                .steps { text-align: left; background: #f8fafc; padding: 1rem 1.4rem; border-radius: 10px; font-size: 0.92rem; margin-top: 1rem; }
+                .url { font-family: monospace; font-size: 0.78rem; color: #64748b; margin-top: 1rem; word-break: break-all; }
+              </style>
+            </head>
+            <body>
+              <div class="poster">
+                <span class="badge">UNIVERSITY MATH LAB</span>
+                <h1>Scan to Check In &amp; Out</h1>
+                <p>Help us keep wait times under 8 minutes and staff tutors for your exact math course!</p>
+                <div class="qr-wrap">${qrHtml}</div>
+                <div class="steps">
+                  <strong>1. Arriving:</strong> Scan code, pick your Course &amp; Lecturer, and tap <strong>Check In</strong>.<br/><br/>
+                  <strong>2. Leaving:</strong> Tap <strong>Check Out</strong> next to your name when finished.
+                </div>
+                <div class="url">${url}</div>
+              </div>
+              <script>window.onload = () => window.print();<\/script>
+            </body>
+            </html>
+          `);
+          win.document.close();
+        }
+      });
+    }
+
+    // Export QR Log to Excel & Clear Completed Log
+    const btnExportQrExcel = document.getElementById("btn-export-qr-excel");
+    if (btnExportQrExcel) {
+      btnExportQrExcel.addEventListener("click", exportQrAttendanceExcel);
+    }
+
+    const btnClearCompleted = document.getElementById("btn-clear-completed-log");
+    if (btnClearCompleted) {
+      btnClearCompleted.addEventListener("click", () => {
+        appData.attendanceLog = (appData.attendanceLog || []).filter(r => r.status === "active");
+        saveState("Cleared completed check-out history");
+        renderQrTab();
+      });
+    }
+
+    // Listen for live check-ins from checkin.html across browser tabs
+    window.addEventListener("storage", e => {
+      if (e.key === STORAGE_KEY) {
+        appData = loadInitialState();
+        syncSlidersToUI();
+        renderAll(true);
+        showToast("Synced live student QR Check-In / Check-Out!");
+      }
     });
 
     syncSlidersToUI();

@@ -12,6 +12,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- SheetJS (xlsx) for Direct Excel File Import/Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Lightweight QR Code SVG Generator -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -45,6 +47,9 @@
         </button>
         <button class="nav-tab" data-tab="tab-editor">
           <span>✏️</span> Edit Data, Roster &amp; Excel Import
+        </button>
+        <button class="nav-tab" data-tab="tab-qr">
+          <span>📱</span> QR Check-In &amp; Kiosk
         </button>
       </nav>
 
@@ -414,6 +419,160 @@
           </div>
         </div>
         <div class="table-wrap" id="editor-arrivals-table-wrap"></div>
+      </div>
+
+    </section>
+
+    <!-- ==================================================================
+         TAB 5: QR CODE STUDENT CHECK-IN / CHECK-OUT & LIVE ATTENDANCE KIOSK
+         ================================================================== -->
+    <section id="tab-qr" class="tab-panel">
+
+      <!-- Top Summary KPI Bar for QR Check-In System -->
+      <div class="kpi-grid" id="qr-kpi-grid"></div>
+
+      <div class="grid-2">
+        <!-- Left Card: Printable QR Code Poster & 5-Second Student Check-In Form -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>1. Lab Door QR Code &amp; 5-Second Student Check-In</h2>
+              <p>Students scan the QR code at the Math Lab door (or use this kiosk) to log their arrival time (&lambda;<sub>d,t,s</sub>), course section, and lecturer</p>
+            </div>
+            <span class="badge badge-blue">Live Arrival Tracker</span>
+          </div>
+
+          <div style="display:grid;grid-template-columns:220px 1fr;gap:1.15rem;align-items:start;">
+            <!-- Scannable QR Code Poster Box -->
+            <div class="qr-poster-box" id="qr-poster-card">
+              <div style="font-size:0.72rem;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#1d4ed8;">MATH LAB CHECK-IN</div>
+              <div id="qr-code-container" style="min-height:175px;display:flex;align-items:center;justify-content:center;"></div>
+              <div style="font-size:0.72rem;font-weight:600;color:#334155;line-height:1.3;">
+                Scan with phone camera to Check In &amp; Check Out
+              </div>
+              <div style="display:flex;flex-direction:column;gap:0.35rem;width:100%;">
+                <a id="btn-open-checkin-page" href="checkin.html" target="_blank" rel="noopener" class="btn btn-primary" style="justify-content:center;font-size:0.74rem;padding:0.35rem 0.5rem;text-decoration:none;">
+                  ↗️ Open Mobile Page
+                </a>
+                <button type="button" class="btn" id="btn-print-qr-poster" style="justify-content:center;font-size:0.73rem;padding:0.3rem 0.5rem;color:#0f172a;border-color:#cbd5e1;background:#f8fafc;">
+                  🖨️ Print Door Poster
+                </button>
+              </div>
+            </div>
+
+            <!-- Semantic Check-In Form -->
+            <form id="qr-checkin-form" action="#tab-qr" method="POST" novalidate>
+              <fieldset class="kiosk-fieldset">
+                <legend>Student Check-In Kiosk</legend>
+
+                <div class="kiosk-form-group">
+                  <label for="checkin-student-name">Student Name or ID *</label>
+                  <input
+                    type="text"
+                    id="checkin-student-name"
+                    name="student_name"
+                    class="kiosk-input"
+                    placeholder="e.g. Jordan Miles (#90214)"
+                    required
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    enterkeyhint="next"
+                    aria-describedby="checkin-name-error"
+                  />
+                  <div id="checkin-name-error" class="error-msg" aria-live="polite">
+                    <span aria-hidden="true">❌</span> Please enter your student name or ID number.
+                  </div>
+                </div>
+
+                <div class="kiosk-form-group">
+                  <label for="checkin-course-select">Course Section &amp; Lecturer *</label>
+                  <select id="checkin-course-select" name="course_code" class="kiosk-input"></select>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;">
+                  <div class="kiosk-form-group">
+                    <label for="checkin-subject-select">Math Subject *</label>
+                    <select id="checkin-subject-select" name="subject" class="kiosk-input"></select>
+                  </div>
+                  <div class="kiosk-form-group">
+                    <label for="checkin-day-select">Day &amp; Hour Block *</label>
+                    <div style="display:flex;gap:0.35rem;">
+                      <select id="checkin-day-select" name="day" class="kiosk-input" style="padding:0.4rem;">
+                        <option value="Monday">Mon</option>
+                        <option value="Tuesday">Tue</option>
+                        <option value="Wednesday">Wed</option>
+                        <option value="Thursday">Thu</option>
+                      </select>
+                      <select id="checkin-hour-select" name="hour_block" class="kiosk-input" style="padding:0.4rem;"></select>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin-bottom:0.75rem;">
+                  <label for="checkin-autosync-toggle" style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--text-secondary);cursor:pointer;">
+                    <input type="checkbox" id="checkin-autosync-toggle" name="auto_sync" checked style="accent-color:var(--accent-emerald);width:16px;height:16px;" />
+                    <span>Auto-add check-in to Lab Hourly Arrivals (&lambda;<sub>d,t,s</sub>)</span>
+                  </label>
+                </div>
+
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                  <button type="submit" id="btn-submit-checkin" class="btn btn-emerald" style="flex:1;justify-content:center;min-height:48px;font-size:0.9rem;">
+                    ✅ Check In Student
+                  </button>
+                  <button type="button" id="btn-sim-trig-wave" class="btn btn-amber" title="Simulate 5 Trigonometry students checking in at 10:00 AM" style="min-height:48px;font-size:0.78rem;">
+                    ⚡ Demo +5 Trig Rush
+                  </button>
+                </div>
+              </fieldset>
+            </form>
+          </div>
+
+          <!-- Custom QR Target URL Bar -->
+          <div style="margin-top:0.9rem;padding-top:0.75rem;border-top:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">
+            <label for="qr-target-url-input" style="font-size:0.76rem;font-weight:600;color:var(--text-secondary);">QR Code Target Link (Mobile Check-In Page or Google Form):</label>
+            <div style="display:flex;gap:0.4rem;flex:1;min-width:240px;">
+              <input type="url" id="qr-target-url-input" name="qr_target_url" class="text-input" style="width:100%;font-size:0.76rem;" autocorrect="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" id="btn-update-qr-url" class="btn" style="font-size:0.75rem;white-space:nowrap;">Update QR</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Card: Active Students in Lab & 1-Tap Check-Out -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <h2>2. Students Currently in the Lab (1-Tap Check-Out)</h2>
+              <p>Checking out records exact session duration (1/&mu;) so the model knows how long tutoring actually takes</p>
+            </div>
+            <div style="display:flex;gap:0.45rem;align-items:center;">
+              <button type="button" class="btn btn-primary" id="btn-apply-measured-mu" title="Set model session length slider (1/mu) to the measured average from completed check-outs">
+                🔄 Sync Measured 1/&mu; to Model
+              </button>
+            </div>
+          </div>
+
+          <div class="table-wrap" id="qr-active-students-wrap"></div>
+        </div>
+      </div>
+
+      <!-- Bottom Card: Completed Check-In / Check-Out Log & Subject Breakdown -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>3. Completed Check-In / Check-Out Log &amp; Lecturer Attribution</h2>
+            <p>Full timestamped audit trail showing which courses, professors, and subjects drive Math Lab traffic and how long each session lasted</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button type="button" class="btn btn-emerald" id="btn-export-qr-excel">
+              📊 Export Check-In Log (.xlsx)
+            </button>
+            <button type="button" class="btn" id="btn-clear-completed-log">
+              🗑️ Clear Completed History
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap" id="qr-completed-log-wrap"></div>
       </div>
 
     </section>

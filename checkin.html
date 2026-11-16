@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Math Lab Student Check-In &amp; Check-Out — MATH 319</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .mobile-shell {
+      max-width: 540px;
+      margin: 1.5rem auto 3rem;
+      padding: 0 1rem;
+    }
+    .mobile-header-card {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(16, 185, 129, 0.12));
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+      text-align: center;
+    }
+    .mobile-header-card h1 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      margin: 0.35rem 0 0.25rem;
+    }
+    .mobile-header-card p {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      margin: 0;
+    }
+  </style>
+</head>
+<body>
+  <main class="mobile-shell">
+    <div class="mobile-header-card">
+      <span class="brand-badge">MATH 319 &bull; STUDENT PORTAL</span>
+      <h1>University Math Lab Check-In</h1>
+      <p>Check in when you arrive and check out when you leave so we can staff your courses with zero wait time.</p>
+      <div style="margin-top:0.75rem;">
+        <a href="index.html" class="btn" style="text-decoration:none;font-size:0.76rem;padding:0.3rem 0.7rem;">
+          &larr; Back to Full Analytics Dashboard
+        </a>
+      </div>
+    </div>
+
+    <div class="card">
+      <form id="mobile-checkin-form" action="checkin.html" method="POST" novalidate>
+        <fieldset class="kiosk-fieldset">
+          <legend>1. Arriving? Check In Here</legend>
+
+          <div class="kiosk-form-group">
+            <label for="m-student-name">Student Name or University ID *</label>
+            <input
+              type="text"
+              id="m-student-name"
+              name="student_name"
+              class="kiosk-input"
+              placeholder="e.g. Alex Rivera (#90312)"
+              required
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              enterkeyhint="next"
+              aria-describedby="m-name-error"
+            />
+            <div id="m-name-error" class="error-msg" aria-live="polite">
+              <span aria-hidden="true">❌</span> Please enter your student name or ID number.
+            </div>
+          </div>
+
+          <div class="kiosk-form-group">
+            <label for="m-course-select">Course Section &amp; Lecturer *</label>
+            <select id="m-course-select" name="course_code" class="kiosk-input"></select>
+          </div>
+
+          <div class="kiosk-form-group">
+            <label for="m-subject-select">Math Subject *</label>
+            <select id="m-subject-select" name="subject" class="kiosk-input"></select>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem;">
+            <div class="kiosk-form-group">
+              <label for="m-day-select">Day *</label>
+              <select id="m-day-select" name="day" class="kiosk-input">
+                <option value="Monday">Monday</option>
+                <option value="Tuesday">Tuesday</option>
+                <option value="Wednesday">Wednesday</option>
+                <option value="Thursday">Thursday</option>
+              </select>
+            </div>
+            <div class="kiosk-form-group">
+              <label for="m-hour-select">Arrival Hour *</label>
+              <select id="m-hour-select" name="hour_block" class="kiosk-input"></select>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-emerald" style="width:100%;justify-content:center;min-height:50px;font-size:1rem;">
+            ✅ Check In to Math Lab
+          </button>
+        </fieldset>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h2>2. Leaving? Tap Your Name to Check Out</h2>
+          <p>Tap <strong>Check Out</strong> when you finish so your session length is recorded</p>
+        </div>
+      </div>
+      <div id="m-active-list"></div>
+    </div>
+  </main>
+
+  <div id="toast" class="toast-notification">Checked in!</div>
+
+  <script src="data.js"></script>
+  <script>
+    (function () {
+      const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (parsed && parsed.tutors && parsed.hourlyArrivals) {
+              if (!Array.isArray(parsed.attendanceLog)) {
+                parsed.attendanceLog = JSON.parse(JSON.stringify(window.MATH_LAB_DEFAULT_DATA.attendanceLog || []));
+              }
+              return parsed;
+            }
+          }
+        } catch (e) {}
+        return JSON.parse(JSON.stringify(window.MATH_LAB_DEFAULT_DATA));
+      }
+
+      function saveState(state, msg) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (e) {}
+        if (msg) {
+          const t = document.getElementById("toast");
+          t.textContent = msg;
+          t.classList.add("show");
+          clearTimeout(t._timer);
+          t._timer = setTimeout(() => t.classList.remove("show"), 2600);
+        }
+      }
+
+      let state = loadState();
+      const courseSel = document.getElementById("m-course-select");
+      const subSel = document.getElementById("m-subject-select");
+      const hrSel = document.getElementById("m-hour-select");
+      const nameInput = document.getElementById("m-student-name");
+      const form = document.getElementById("mobile-checkin-form");
+
+      // Sync aria-invalid for required field accessibility
+      const syncAriaInvalid = (input) => {
+        if (!input.checkValidity()) {
+          input.setAttribute("aria-invalid", "true");
+        } else {
+          input.removeAttribute("aria-invalid");
+        }
+      };
+      form.addEventListener("blur", e => {
+        if (e.target.matches("input[required]")) syncAriaInvalid(e.target);
+      }, true);
+      form.addEventListener("input", e => {
+        if (e.target.matches("input[required]") && e.target.checkValidity()) {
+          e.target.removeAttribute("aria-invalid");
+        }
+      });
+
+      function populateOptions() {
+        subSel.innerHTML = state.subjects.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+        hrSel.innerHTML = state.meta.operatingHours.map(h => `<option value="${h.id}" ${h.id === "10:00" ? "selected" : ""}>${h.label}</option>`).join("");
+        courseSel.innerHTML = (state.classSchedule || []).map((c, idx) => {
+          const profs = Array.isArray(c.lecturers) ? c.lecturers.join(", ") : "Staff";
+          return `<option value="${idx}">${c.code} — ${c.title} (${profs})</option>`;
+        }).join("") + `<option value="other">Other / General Walk-In</option>`;
+
+        if (state.classSchedule && state.classSchedule[0]) {
+          subSel.value = state.classSchedule[0].subject;
+          hrSel.value = state.classSchedule[0].releaseHour || "10:00";
+        }
+      }
+
+      courseSel.addEventListener("change", () => {
+        const val = courseSel.value;
+        if (val !== "other" && state.classSchedule[Number(val)]) {
+          const c = state.classSchedule[Number(val)];
+          subSel.value = c.subject;
+          if (c.releaseHour) hrSel.value = c.releaseHour;
+        }
+      });
+
+      function renderActiveList() {
+        state = loadState();
+        const active = (state.attendanceLog || []).filter(r => r.status === "active");
+        const wrap = document.getElementById("m-active-list");
+        if (active.length === 0) {
+          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No students currently checked in.</div>`;
+          return;
+        }
+        wrap.innerHTML = active.map(r => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.75rem;border:1px solid var(--border-color);border-radius:8px;margin-bottom:0.5rem;background:var(--bg-subtle);">
+            <div>
+              <div style="font-weight:700;font-size:0.92rem;">${r.studentName}</div>
+              <div style="font-size:0.76rem;color:var(--text-secondary);">${r.courseCode} (${r.lecturer}) &bull; Arrived ${r.checkInTime}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <input type="number" class="num-input m-dur-input" data-id="${r.id}" value="${r.durationMinutes || 20}" min="1" max="180" style="width:58px;" title="Session duration (minutes)" />
+              <span style="font-size:0.74rem;color:var(--text-secondary);">min</span>
+              <button type="button" class="btn btn-primary m-btn-checkout" data-id="${r.id}" style="min-height:42px;padding:0.4rem 0.75rem;">
+                👋 Check Out
+              </button>
+            </div>
+          </div>
+        `).join("");
+
+        wrap.querySelectorAll(".m-btn-checkout").forEach(btn => {
+          btn.addEventListener("click", e => {
+            const id = e.currentTarget.getAttribute("data-id");
+            const durInp = wrap.querySelector(`.m-dur-input[data-id="${id}"]`);
+            const mins = durInp ? Math.max(1, parseInt(durInp.value, 10) || 20) : 20;
+            const rec = state.attendanceLog.find(x => x.id === id);
+            if (rec) {
+              rec.status = "completed";
+              rec.durationMinutes = mins;
+              rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+              saveState(state, `Checked out ${rec.studentName} (${mins} min session)!`);
+              renderActiveList();
+            }
+          });
+        });
+      }
+
+      form.addEventListener("submit", e => {
+        e.preventDefault();
+        syncAriaInvalid(nameInput);
+        if (!form.checkValidity()) {
+          nameInput.focus();
+          return;
+        }
+        state = loadState();
+        const cIdx = courseSel.value;
+        const courseObj = (cIdx !== "other" && state.classSchedule[Number(cIdx)]) ? state.classSchedule[Number(cIdx)] : null;
+        const day = document.getElementById("m-day-select").value;
+        const hr = hrSel.value;
+        const sub = subSel.value;
+        const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        const newRec = {
+          id: "chk-" + Date.now(),
+          studentName: nameInput.value.trim(),
+          courseCode: courseObj ? courseObj.code : "General Walk-In",
+          lecturer: courseObj && Array.isArray(courseObj.lecturers) ? courseObj.lecturers.join(", ") : "Dept. Faculty",
+          subject: sub,
+          day: day,
+          hourBlock: hr,
+          checkInTime: nowStr,
+          checkOutTime: null,
+          durationMinutes: 20,
+          status: "active"
+        };
+
+        state.attendanceLog.unshift(newRec);
+        if (state.hourlyArrivals[day] && state.hourlyArrivals[day][hr]) {
+          state.hourlyArrivals[day][hr][sub] = (Number(state.hourlyArrivals[day][hr][sub]) || 0) + 1;
+        }
+        saveState(state, `Checked in ${newRec.studentName} (+1 ${sub.toUpperCase()} arrival)!`);
+        nameInput.value = "";
+        nameInput.removeAttribute("aria-invalid");
+        renderActiveList();
+      });
+
+      populateOptions();
+      renderActiveList();
+    })();
+  </script>
+</body>
+</html>

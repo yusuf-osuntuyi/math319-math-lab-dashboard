@@ -52,6 +52,7 @@ def build_web_zip():
     zip_path = os.path.join(ROOT, "math319-math-lab-dashboard.zip")
     web_files = [
         "index.html",
+        "checkin.html",
         "styles.css",
         "data.js",
         "optimizer.js",
