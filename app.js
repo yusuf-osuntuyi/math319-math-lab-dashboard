@@ -16,8 +16,25 @@
   // Ensure classSchedule and lecturers have all required editable fields
   function normalizeAppData(data) {
     const def = window.MATH_LAB_DEFAULT_DATA;
+    const legacyProfMap = {
+      "Prof. Ross": "Dr. Andrew Ross",
+      "Dr. Carter": "Dr. Roxanne Katus",
+      "Prof. Reynolds": "Prof. Mary Walker",
+      "Dr. Lin": "Dr. Gabriela Dumitrascu",
+      "Prof. Alvarez": "Dr. Lon Mitchell",
+      "Dr. Patel": "Dr. Khairul Islam"
+    };
+    const mapProfName = (name) => legacyProfMap[name] || name;
+
     if (!Array.isArray(data.lecturers) || data.lecturers.length === 0) {
-      data.lecturers = clone(def.lecturers || ["Prof. Ross", "Dr. Carter", "Prof. Reynolds", "Dr. Lin", "Prof. Alvarez", "Dr. Patel"]);
+      data.lecturers = clone(def.lecturers || []);
+    } else {
+      data.lecturers = data.lecturers.map(mapProfName);
+      (def.lecturers || []).forEach(emuProf => {
+        if (!data.lecturers.includes(emuProf)) {
+          data.lecturers.push(emuProf);
+        }
+      });
     }
     if (!Array.isArray(data.classSchedule)) {
       data.classSchedule = clone(def.classSchedule);
@@ -25,7 +42,9 @@
     data.classSchedule.forEach((c, i) => {
       const defItem = (def.classSchedule && def.classSchedule[i]) || {};
       if (!Array.isArray(c.lecturers)) {
-        c.lecturers = Array.isArray(defItem.lecturers) ? clone(defItem.lecturers) : ["Prof. Ross"];
+        c.lecturers = Array.isArray(defItem.lecturers) ? clone(defItem.lecturers) : ["Dr. Andrew Ross"];
+      } else {
+        c.lecturers = c.lecturers.map(mapProfName);
       }
       c.lecturers.forEach(prof => {
         if (prof && !data.lecturers.includes(prof)) {
@@ -68,12 +87,14 @@
       if (!p.major) p.major = (defProf && defProf.major) || "STEM / Mathematics";
       if (!p.hobbies) p.hobbies = (defProf && defProf.hobbies) || "Campus study groups, retro gaming, intramural sports";
       if (!p.avatarId) p.avatarId = (defProf && defProf.avatarId) || (avatarList[idx % Math.max(1, avatarList.length)] ? avatarList[idx % avatarList.length].id : "pixel-wizard");
+      if (p.lecturer) p.lecturer = mapProfName(p.lecturer);
     });
     // Clean any legacy "(#90214)" ID suffixes from attendanceLog student names so they match studentProfiles
     data.attendanceLog.forEach(r => {
       if (typeof r.studentName === "string") {
         r.studentName = r.studentName.replace(/\s*\(#\d+\)\s*$/, "").trim();
       }
+      if (r.lecturer) r.lecturer = mapProfName(r.lecturer);
     });
     return data;
   }
