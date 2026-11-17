@@ -265,7 +265,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       impactNote: "Creates 10:00 AM Trig bottleneck if Trig tutors aren't scheduled"
     },
     {
-      code: "MATH 111-01/02",
+      code: "MATH 105-01/02",
       subject: "alg",
       title: "College Algebra (3 Lecture Sections)",
       lecturers: ["Prof. Mary Walker", "Dr. Gabriela Dumitrascu"],
@@ -291,7 +291,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       impactNote: "Compounds the 2:00 PM peak queue buildup"
     },
     {
-      code: "MATH 200-01/02",
+      code: "STAT 170-01/02",
       subject: "stats",
       title: "Elementary Statistics",
       lecturers: ["Dr. Khairul Islam", "Dr. Tanweer Shapla"],
@@ -304,7 +304,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       impactNote: "Afternoon Statistics wave between 2:00 PM and 4:00 PM"
     },
     {
-      code: "MATH 161-01",
+      code: "MATH 120-01",
       subject: "calc",
       title: "Calculus I",
       lecturers: ["Dr. John Curran"],
@@ -478,7 +478,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       major: "Architecture & Urban Design",
       hobbies: "Digital sketching, lo-fi beats production, skateboarding",
       avatarId: "pixel-knight",
-      courseCode: "MATH 111-01/02",
+      courseCode: "MATH 105-01/02",
       subject: "alg",
       lecturer: "Prof. Mary Walker",
       xp: 310,
@@ -526,7 +526,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       major: "Applied Mathematics & Data Science",
       hobbies: "Putnam math team, speedcubing, baking sourdough, tennis",
       avatarId: "pixel-hero",
-      courseCode: "MATH 161-01",
+      courseCode: "MATH 120-01",
       subject: "calc",
       lecturer: "Dr. John Curran",
       xp: 750,
@@ -542,7 +542,7 @@ window.MATH_LAB_DEFAULT_DATA = {
       major: "Quantitative Finance & Economics",
       hobbies: "Intramural soccer, sports analytics podcast, vintage synthesizers",
       avatarId: "pixel-ninja",
-      courseCode: "MATH 200-01/02",
+      courseCode: "STAT 170-01/02",
       subject: "stats",
       lecturer: "Dr. Khairul Islam",
       xp: 240,
@@ -585,7 +585,7 @@ window.MATH_LAB_DEFAULT_DATA = {
     {
       id: "chk-103",
       studentName: "Devon Brooks",
-      courseCode: "MATH 111-01/02",
+      courseCode: "MATH 105-01/02",
       lecturer: "Prof. Mary Walker",
       subject: "alg",
       day: "Monday",
@@ -627,7 +627,7 @@ window.MATH_LAB_DEFAULT_DATA = {
     {
       id: "chk-100",
       studentName: "Sofia Patel",
-      courseCode: "MATH 161-01",
+      courseCode: "MATH 120-01",
       lecturer: "Dr. John Curran",
       subject: "calc",
       day: "Tuesday",

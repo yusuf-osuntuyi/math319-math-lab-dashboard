@@ -311,7 +311,10 @@
           </div>
           <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
             <span class="badge badge-amber">Live Schedule Correlation</span>
-            <button class="btn btn-primary" id="btn-add-class-section">
+            <button type="button" class="btn btn-emerald" id="btn-open-emich-import" title="Paste or upload EMU semester class schedule from my.emich Banner">
+              📋 Paste / Upload Schedule from my.emich
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-add-class-section">
               + Add Course Section
             </button>
           </div>
@@ -705,6 +708,68 @@
               💾 Save Student Bio
             </button>
           </div>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- MY.EMICH SEMESTER SCHEDULE PASTE / EXCEL UPLOAD MODAL (<dialog closedby="any">) -->
+  <dialog id="emich-import-dialog" class="bio-modal" closedby="any" aria-labelledby="emich-import-title" style="max-width:720px;">
+    <div class="bio-modal-inner">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.9rem;padding-bottom:0.75rem;border-bottom:1px solid var(--border-color);">
+        <div>
+          <span class="badge badge-emerald">EMU BANNER AUTO-PARSER</span>
+          <h2 id="emich-import-title" style="font-size:1.25rem;font-weight:800;margin:0.25rem 0 0.15rem;">
+            📋 Paste or Upload Semester Schedule from my.emich
+          </h2>
+          <p style="font-size:0.79rem;color:var(--text-secondary);margin:0;">
+            Automatically extracts <strong>Course &amp; Section</strong> (e.g. MATH 105, MATH 112, MATH 120, STAT 170), matches <strong>Assigned EMU Instructor</strong>, converts <strong>Meeting Time &rarr; Release Hour</strong>, and reads <strong>Enrolled Count</strong>!
+          </p>
+        </div>
+        <form method="dialog">
+          <button type="submit" class="btn" value="close" aria-label="Close my.emich Import Modal" style="padding:0.3rem 0.65rem;">✕ Close</button>
+        </form>
+      </div>
+
+      <!-- Option A: Upload Excel / CSV File from my.emich -->
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.6rem;padding:0.7rem 0.9rem;background:var(--bg-subtle);border:1px solid var(--border-color);border-radius:8px;margin-bottom:0.9rem;">
+        <div style="font-size:0.8rem;">
+          <strong>Option 1:</strong> Have an exported <code>.xlsx</code> or <code>.csv</code> class schedule from <strong>my.emich</strong>?
+        </div>
+        <label class="btn btn-primary" style="cursor:pointer;font-size:0.76rem;padding:0.32rem 0.75rem;">
+          📂 Upload Schedule (.xlsx / .csv)
+          <input type="file" id="emich-schedule-file-input" accept=".xlsx,.xls,.csv" style="display:none;" />
+        </label>
+      </div>
+
+      <!-- Option B: Copy-Paste Text Directly from my.emich Class Search -->
+      <form id="emich-paste-form" action="#tab-models" method="POST">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.35rem;">
+          <label for="emich-paste-textarea" style="font-size:0.8rem;font-weight:700;color:var(--text-secondary);">
+            Option 2: Copy &amp; Paste Rows Directly from my.emich Class Search:
+          </label>
+          <button type="button" class="btn btn-amber" id="btn-load-sample-emich" style="font-size:0.73rem;padding:0.22rem 0.6rem;">
+            ⚡ Load Sample EMU Semester Schedule
+          </button>
+        </div>
+
+        <textarea
+          id="emich-paste-textarea"
+          name="emich_schedule_text"
+          class="text-input"
+          rows="7"
+          placeholder="Paste rows copied from my.emich Class Search (Tab, Comma, or Pipe separated)&#10;Example:&#10;MATH 112-01 | Topics in Precalculus (Trig) | Dr. Andrew Ross | MW 9:00 AM - 9:50 AM | 68&#10;MATH 105-01 | College Algebra | Prof. Mary Walker | MTWR 12:00 PM - 12:50 PM | 145&#10;STAT 170-01 | Elementary Statistics | Dr. Khairul Islam | MWR 1:00 PM - 2:15 PM | 95&#10;MATH 120-01 | Calculus I | Dr. John Curran | MTWR 2:00 PM - 2:50 PM | 74"
+          style="width:100%;font-family:'JetBrains Mono',monospace;font-size:0.76rem;line-height:1.45;resize:vertical;margin-bottom:0.75rem;"
+        ></textarea>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;padding-top:0.75rem;border-top:1px solid var(--border-color);">
+          <label style="display:inline-flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:var(--text-secondary);cursor:pointer;">
+            <input type="checkbox" id="emich-replace-existing" checked style="accent-color:var(--accent-emerald);width:16px;height:16px;" />
+            <span>Replace current course table &amp; sync Lab Hourly Arrivals (&lambda;<sub>d,t,s</sub>)</span>
+          </label>
+          <button type="submit" class="btn btn-emerald" style="font-weight:800;padding:0.45rem 1rem;">
+            ✅ Parse &amp; Import my.emich Schedule
+          </button>
         </div>
       </form>
     </div>

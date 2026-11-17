@@ -2474,7 +2474,7 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     if (btnAddClassSection) {
       btnAddClassSection.addEventListener("click", () => {
         const nextNum = appData.classSchedule.length + 1;
-        const defaultProf = (appData.lecturers && appData.lecturers[0]) ? [appData.lecturers[0]] : ["Prof. Ross"];
+        const defaultProf = (appData.lecturers && appData.lecturers[0]) ? [appData.lecturers[0]] : ["Dr. Andrew Ross"];
         const newSection = {
           code: `MATH 10${nextNum}-01`,
           subject: "alg",
@@ -2496,6 +2496,267 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         });
         saveState(`Added course section ${newSection.code}`);
         renderAll(true);
+      });
+    }
+
+    // ========================================================================
+    // MY.EMICH SEMESTER SCHEDULE PASTE / EXCEL AUTO-PARSER & IMPORTER
+    // ========================================================================
+    const emichDialog = document.getElementById("emich-import-dialog");
+    const btnOpenEmich = document.getElementById("btn-open-emich-import");
+    const btnLoadSampleEmich = document.getElementById("btn-load-sample-emich");
+    const emichPasteForm = document.getElementById("emich-paste-form");
+    const emichFileInput = document.getElementById("emich-schedule-file-input");
+
+    function inferSubjectFromCourseAndTitle(codeStr, titleStr) {
+      const combined = `${codeStr || ""} ${titleStr || ""}`.toLowerCase();
+      if (combined.includes("stat") || /math\s*200|stat\s*170|stat\s*260|stat\s*360/i.test(combined)) return "stats";
+      if (combined.includes("trig") || /math\s*112/i.test(combined)) return "trig";
+      if (combined.includes("calc") && !combined.includes("precalc")) return "calc";
+      if (/math\s*120|math\s*121|math\s*122|math\s*161|math\s*223/i.test(combined)) return "calc";
+      if (combined.includes("precalc") || /math\s*115|math\s*118|math\s*119/i.test(combined)) return "pre";
+      return "alg";
+    }
+
+    function matchEmuInstructor(rawInstructor) {
+      const raw = (rawInstructor || "").trim();
+      if (!raw) return ["Dr. Andrew Ross"];
+      // Split multiple instructors if separated by "/" or ";" or "&"
+      const parts = raw.split(/\s*[\/;&]\s*/).filter(Boolean);
+      const matchedList = [];
+
+      parts.forEach(part => {
+        let candidate = part.trim();
+        // Handle Banner "Last, First" format (e.g. "Ross, Andrew")
+        if (candidate.includes(",")) {
+          const [last, first] = candidate.split(",").map(s => s.trim());
+          if (last && first) candidate = `${first} ${last}`;
+        }
+        const lowerCand = candidate.toLowerCase();
+        const foundInPool = (appData.lecturers || []).find(prof => {
+          const pLower = prof.toLowerCase();
+          if (pLower === lowerCand || pLower.includes(lowerCand)) return true;
+          const lastWord = prof.split(/\s+/).pop().toLowerCase();
+          return lastWord.length > 2 && lowerCand.includes(lastWord);
+        });
+        if (foundInPool) {
+          if (!matchedList.includes(foundInPool)) matchedList.push(foundInPool);
+        } else {
+          const formatted = /^(dr\.|prof\.)/i.test(candidate) ? candidate : `Dr. ${candidate}`;
+          if (!appData.lecturers.includes(formatted)) {
+            appData.lecturers.push(formatted);
+          }
+          if (!matchedList.includes(formatted)) matchedList.push(formatted);
+        }
+      });
+
+      return matchedList.length > 0 ? matchedList : ["Dr. Andrew Ross"];
+    }
+
+    function parseMeetingTimeAndReleaseHour(rawTimeStr) {
+      const raw = (rawTimeStr || "").trim();
+      // Extract days if prefixed like "MW 9:00 AM - 9:50 AM" or "TR 8:30 AM - 9:50 AM" or "MTWR ..."
+      const days = [];
+      const dayPrefixMatch = raw.match(/^([MTWRF]+)\b/i);
+      if (dayPrefixMatch) {
+        const dCode = dayPrefixMatch[1].toUpperCase();
+        if (dCode.includes("M")) days.push("Monday");
+        if (dCode.includes("T")) days.push("Tuesday");
+        if (dCode.includes("W")) days.push("Wednesday");
+        if (dCode.includes("R")) days.push("Thursday");
+      }
+      const cleanTime = raw.replace(/^[MTWRF]+\s+/i, "").trim() || "9:00 AM – 9:50 AM";
+
+      // Find end time in range (e.g., "- 9:50 AM" or "– 12:50 PM" or "- 2:15 PM")
+      const timeMatches = [...cleanTime.matchAll(/(\d{1,2}):(\d{2})\s*(AM|PM)?/gi)];
+      let releaseHour = "10:00";
+      if (timeMatches.length > 0) {
+        const endMatch = timeMatches[timeMatches.length - 1];
+        let hr = parseInt(endMatch[1], 10);
+        const min = parseInt(endMatch[2], 10);
+        const ampm = (endMatch[3] || "").toUpperCase();
+        if (ampm === "PM" && hr < 12) hr += 12;
+        if (ampm === "AM" && hr === 12) hr = 0;
+        if (!ampm && hr >= 1 && hr <= 6) hr += 12; // e.g. "1:50" -> 13:50
+
+        // If lecture ends at :40, :45, :50, :55, students arrive at the next hour (hr + 1)
+        const targetHr24 = min >= 30 ? hr + 1 : hr;
+        const clampedHr = Math.min(16, Math.max(9, targetHr24));
+        releaseHour = (clampedHr < 10 ? "0" : "") + clampedHr + ":00";
+      }
+
+      return {
+        days: days.length > 0 ? days : ["Monday", "Tuesday", "Wednesday", "Thursday"],
+        classTime: cleanTime,
+        releaseHour: releaseHour
+      };
+    }
+
+    function applyImportedEmichSections(parsedSections, replaceExisting) {
+      if (!parsedSections || parsedSections.length === 0) {
+        showToast("Could not find valid course rows to import");
+        return;
+      }
+      if (replaceExisting) {
+        // Subtract old classSchedule walk-ins from hourlyArrivals, then add new ones
+        appData.classSchedule.forEach(oldC => {
+          const w = typeof oldC.walkIns === "number" ? oldC.walkIns : 0;
+          (oldC.days || appData.meta.operatingDays).forEach(d => {
+            if (appData.hourlyArrivals[d] && appData.hourlyArrivals[d][oldC.releaseHour]) {
+              const cur = Number(appData.hourlyArrivals[d][oldC.releaseHour][oldC.subject]) || 0;
+              appData.hourlyArrivals[d][oldC.releaseHour][oldC.subject] = Math.max(1, cur - w);
+            }
+          });
+        });
+        appData.classSchedule = parsedSections;
+      } else {
+        appData.classSchedule.push(...parsedSections);
+      }
+
+      // Add imported walk-in waves into hourlyArrivals
+      parsedSections.forEach(c => {
+        (c.days || appData.meta.operatingDays).forEach(d => {
+          if (appData.hourlyArrivals[d] && appData.hourlyArrivals[d][c.releaseHour]) {
+            const cur = Number(appData.hourlyArrivals[d][c.releaseHour][c.subject]) || 0;
+            appData.hourlyArrivals[d][c.releaseHour][c.subject] = Math.max(1, cur + (c.walkIns || 0));
+          }
+        });
+      });
+
+      if (emichDialog && emichDialog.open) emichDialog.close();
+      saveState(`✅ Imported ${parsedSections.length} EMU course sections from my.emich & updated release waves!`);
+      renderAll(true);
+    }
+
+    function parseRawEmichText(rawText) {
+      const lines = (rawText || "").split(/\r?\n/).map(l => l.trim()).filter(l => l && !l.startsWith("#"));
+      const results = [];
+
+      lines.forEach(line => {
+        // Skip header lines
+        if (/^course\b/i.test(line) && /instructor|time|enrolled/i.test(line)) return;
+        const cols = line.includes("|")
+          ? line.split("|").map(s => s.trim())
+          : (line.includes("\t") ? line.split("\t").map(s => s.trim()) : line.split(",").map(s => s.trim()));
+
+        if (cols.length >= 2) {
+          const code = cols[0] || "MATH 112-01";
+          const title = cols[1] || "EMU Mathematics Lecture";
+          const profRaw = cols[2] || "Dr. Andrew Ross";
+          const timeRaw = cols[3] || "MW 9:00 AM – 9:50 AM";
+          const enrolledNum = parseInt((cols[4] || "60").replace(/[^\d]/g, ""), 10) || 60;
+
+          const sub = inferSubjectFromCourseAndTitle(code, title);
+          const lecturers = matchEmuInstructor(profRaw);
+          const { days, classTime, releaseHour } = parseMeetingTimeAndReleaseHour(timeRaw);
+          const capturePct = sub === "trig" ? 17 : 11;
+          const walkIns = Math.max(2, Math.round((enrolledNum * capturePct) / 100));
+
+          results.push({
+            code: code,
+            subject: sub,
+            title: title,
+            lecturers: lecturers,
+            days: days,
+            classTime: classTime,
+            releaseHour: releaseHour,
+            enrolled: enrolledNum,
+            walkIns: walkIns,
+            expectedLabCapturePct: capturePct,
+            impactNote: `Imported from my.emich (${lecturers.join(", ")} → ${releaseHour} release)`
+          });
+        }
+      });
+      return results;
+    }
+
+    if (emichDialog) {
+      if (!("closedBy" in HTMLDialogElement.prototype)) {
+        emichDialog.addEventListener("click", (event) => {
+          if (event.target !== emichDialog) return;
+          const rect = emichDialog.getBoundingClientRect();
+          const inside = rect.top <= event.clientY && event.clientY <= rect.top + rect.height && rect.left <= event.clientX && event.clientX <= rect.left + rect.width;
+          if (!inside) emichDialog.close();
+        });
+      }
+    }
+
+    if (btnOpenEmich && emichDialog) {
+      btnOpenEmich.addEventListener("click", () => {
+        emichDialog.showModal();
+      });
+    }
+
+    if (btnLoadSampleEmich) {
+      btnLoadSampleEmich.addEventListener("click", () => {
+        const ta = document.getElementById("emich-paste-textarea");
+        if (ta) {
+          ta.value = [
+            "MATH 112-01 | Topics in Precalculus (Trigonometry) | Dr. Andrew Ross | MW 9:00 AM – 9:50 AM | 68",
+            "MATH 112-02 | Topics in Precalculus (Tue/Thu Trig) | Dr. Roxanne Katus | TR 8:30 AM – 9:50 AM | 62",
+            "MATH 105-01/02 | College Algebra (Combined Lectures) | Prof. Mary Walker / Dr. Gabriela Dumitrascu | MTWR 12:00 PM – 12:50 PM | 145",
+            "MATH 115-01 | Precalculus | Dr. Lon Mitchell / Dr. Brandon Alberts | MTWR 1:00 PM – 1:50 PM | 110",
+            "STAT 170-01/02 | Elementary Statistics | Dr. Khairul Islam / Dr. Tanweer Shapla | MWR 1:00 PM – 2:15 PM | 95",
+            "MATH 120-01 | Calculus I | Dr. John Curran / Dr. Ovidiu Calin | MTWR 2:00 PM – 2:50 PM | 74"
+          ].join("\n");
+          showToast("Loaded sample EMU Semester Schedule! Click 'Parse & Import' below.");
+        }
+      });
+    }
+
+    if (emichPasteForm) {
+      emichPasteForm.addEventListener("submit", e => {
+        e.preventDefault();
+        const ta = document.getElementById("emich-paste-textarea");
+        const replaceChk = document.getElementById("emich-replace-existing");
+        const parsed = parseRawEmichText(ta ? ta.value : "");
+        applyImportedEmichSections(parsed, replaceChk ? replaceChk.checked : true);
+      });
+    }
+
+    if (emichFileInput) {
+      emichFileInput.addEventListener("change", e => {
+        const file = e.target.files && e.target.files[0];
+        if (!file || typeof XLSX === "undefined") return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const data = new Uint8Array(ev.target.result);
+            const wb = XLSX.read(data, { type: "array" });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet);
+            const parsed = rows.map(r => {
+              const code = String(r.Course || r.Course_Section || r.Code || r.Subject_Course || "MATH 112-01").trim();
+              const title = String(r.Title || r.Course_Title || r.Description || "EMU Math Course").trim();
+              const profRaw = String(r.Instructor || r.Lecturers || r.Professor || r.Faculty || "Dr. Andrew Ross").trim();
+              const timeRaw = String(r.Time || r.Lecture_Time || r.Meeting_Time || "9:00 AM – 9:50 AM").trim();
+              const enrolledNum = parseInt(r.Enrolled || r.Act || r.Enrollment || 60, 10) || 60;
+              const sub = inferSubjectFromCourseAndTitle(code, title);
+              const lecturers = matchEmuInstructor(profRaw);
+              const { days, classTime, releaseHour } = parseMeetingTimeAndReleaseHour(timeRaw);
+              const capturePct = sub === "trig" ? 17 : 11;
+              const walkIns = parseInt(r.Walk_Ins_Per_Hr || r.WalkIns, 10) || Math.max(2, Math.round((enrolledNum * capturePct) / 100));
+              return {
+                code,
+                subject: sub,
+                title,
+                lecturers,
+                days,
+                classTime,
+                releaseHour,
+                enrolled: enrolledNum,
+                walkIns,
+                expectedLabCapturePct: capturePct,
+                impactNote: `Imported from ${file.name} (${lecturers.join(", ")})`
+              };
+            });
+            const replaceChk = document.getElementById("emich-replace-existing");
+            applyImportedEmichSections(parsed, replaceChk ? replaceChk.checked : true);
+          } catch (err) {
+            showToast("Could not parse my.emich spreadsheet file");
+          }
+        };
+        reader.readAsArrayBuffer(file);
       });
     }
 
