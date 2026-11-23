@@ -20,12 +20,27 @@ def build_standalone_html():
         optimizer_js = f.read()
     with open(os.path.join(ROOT, "app.js"), "r", encoding="utf-8") as f:
         app_js = f.read()
+    with open(os.path.join(ROOT, "qrcode.min.js"), "r", encoding="utf-8") as f:
+        qrcode_js = f.read()
 
     # Inline styles.css
     html = html.replace(
         '<link rel="stylesheet" href="styles.css" />',
         f"<style>\n{css}\n</style>"
     )
+
+    # Inline qrcode.min.js
+    qr_block = (
+        '  <!-- Lightweight Zero-Lag Vector QR Code Generator (Local + Fallback) -->\n'
+        '  <script src="qrcode.min.js"></script>\n'
+        '  <script>\n'
+        '    if (typeof qrcode === "undefined") {\n'
+        '      document.write(\'<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\\/script>\');\n'
+        '    }\n'
+        '  </script>'
+    )
+    if qr_block in html:
+        html = html.replace(qr_block, f"  <!-- Inlined Zero-Lag Vector QR Code Generator -->\n  <script>\n{qrcode_js}\n  </script>")
 
     # Inline data.js, optimizer.js, and app.js
     scripts_block = (
@@ -54,6 +69,7 @@ def build_web_zip():
         "index.html",
         "checkin.html",
         "styles.css",
+        "qrcode.min.js",
         "data.js",
         "optimizer.js",
         "app.js",

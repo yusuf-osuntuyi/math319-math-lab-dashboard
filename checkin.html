@@ -255,28 +255,42 @@
   <script src="data.js"></script>
   <script>
     (function () {
-      const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
+      const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V2_ERLANG";
       const LAST_STUDENT_KEY = "MATH319_REMEMBERED_STUDENT_NAME";
       // Real-time Cross-Device Sync Channel (Phone <-> Laptop Dashboard)
       const SYNC_TOPIC = "emu_math319_lab_yusuf_2026_v2";
       const SYNC_URL = "https://ntfy.sh/" + SYNC_TOPIC;
       const DEVICE_ID = "mob-" + Math.random().toString(36).slice(2, 9);
       let seenEventIds = new Set();
+      let broadcastChannel = null;
+      try {
+        if (typeof BroadcastChannel === "function") {
+          broadcastChannel = new BroadcastChannel("emu_math319_sync");
+        }
+      } catch (e) {}
 
       let selectedHour = "09:00";
       let editAvatarId = "pixel-wizard";
       let editCustomUrl = null;
 
       function broadcastCloudSync(actionType, payload) {
+        const msgBody = {
+          sender: DEVICE_ID,
+          ts: Date.now(),
+          action: actionType,
+          payload: payload
+        };
+        if (broadcastChannel) {
+          try { broadcastChannel.postMessage(msgBody); } catch (e) {}
+        }
         try {
           fetch(SYNC_URL, {
             method: "POST",
-            body: JSON.stringify({
-              sender: DEVICE_ID,
-              ts: Date.now(),
-              action: actionType,
-              payload: payload
-            })
+            headers: {
+              "Title": "EMU Math Lab Mobile Event",
+              "Priority": "high"
+            },
+            body: JSON.stringify(msgBody)
           }).catch(() => {});
         } catch (e) {}
       }
@@ -292,7 +306,10 @@
       function loadState() {
         const def = window.MATH_LAB_DEFAULT_DATA;
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
+          let raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            raw = localStorage.getItem("MATH319_LAB_DASHBOARD_STATE_V1");
+          }
           if (raw) {
             const parsed = JSON.parse(raw);
             if (parsed && parsed.tutors && parsed.hourlyArrivals) {
@@ -781,48 +798,119 @@
         renderActiveList();
       });
 
-      // Subscribe to cross-device sync so phone & laptop stay in sync
+      // Live Cloud Sync Indicator helper
+      function updateSyncStatus(connected) {
+        const badge = document.getElementById("m-live-sync-indicator");
+        if (!badge) return;
+        if (connected) {
+          badge.className = "badge badge-emerald";
+          badge.textContent = "🟢 Live Cloud Sync: Connected (Real-Time)";
+        } else {
+          badge.className = "badge badge-amber";
+          badge.textContent = "🟡 Cloud Sync Reconnecting...";
+        }
+      }
+
+      function handleRemoteData(data) {
+        if (!data || data.sender === DEVICE_ID) return;
+        state = loadState();
+        if (data.action === "checkin" && data.payload && data.payload.record) {
+          const rec = data.payload.record;
+          if (!state.attendanceLog.some(r => r.id === rec.id)) {
+            state.attendanceLog.unshift(rec);
+            const p = data.payload.profile;
+            if (p) {
+              const existing = state.studentProfiles.find(x => x.name.toLowerCase() === p.name.toLowerCase());
+              if (existing) Object.assign(existing, p);
+              else state.studentProfiles.unshift(p);
+            }
+            saveState(state);
+            renderProfileSupport();
+            renderActiveList();
+          }
+        } else if (data.action === "checkout" && data.payload) {
+          const rec = state.attendanceLog.find(r => r.id === data.payload.recordId || (r.status === "active" && (r.studentName || "").toLowerCase() === (data.payload.studentName || "").toLowerCase()));
+          if (rec && rec.status === "active") {
+            rec.status = "completed";
+            rec.checkOutTime = data.payload.checkOutTime || "Done";
+            rec.durationMinutes = data.payload.durationMinutes || 20;
+            saveState(state);
+            renderProfileSupport();
+            renderActiveList();
+          }
+        } else if (data.action === "bio_update" && data.payload && data.payload.profile) {
+          const p = data.payload.profile;
+          const existing = state.studentProfiles.find(x => x.name.toLowerCase() === p.name.toLowerCase());
+          if (existing) Object.assign(existing, p);
+          else state.studentProfiles.unshift(p);
+          saveState(state);
+          renderProfileSupport();
+        } else if (data.action === "delete_profile" && data.payload && data.payload.name) {
+          state.studentProfiles = state.studentProfiles.filter(p => p.name.toLowerCase() !== data.payload.name.toLowerCase());
+          saveState(state);
+          renderProfileSupport();
+        }
+      }
+
+      // 1. Same-device instant tab sync
+      if (broadcastChannel) {
+        broadcastChannel.onmessage = (e) => {
+          try { handleRemoteData(e.data); } catch (err) {}
+        };
+      }
+
+      // 2. Real-time Cross-Device SSE connection
       function handleRemoteMessage(msgObj) {
         if (!msgObj || !msgObj.id || seenEventIds.has(msgObj.id)) return;
         seenEventIds.add(msgObj.id);
         try {
           const data = JSON.parse(msgObj.message || "{}");
-          if (!data || data.sender === DEVICE_ID) return;
-          state = loadState();
-          if (data.action === "checkin" && data.payload && data.payload.record) {
-            const rec = data.payload.record;
-            if (!state.attendanceLog.some(r => r.id === rec.id)) {
-              state.attendanceLog.unshift(rec);
-              const p = data.payload.profile;
-              if (p) {
-                const existing = state.studentProfiles.find(x => x.name.toLowerCase() === p.name.toLowerCase());
-                if (existing) Object.assign(existing, p);
-                else state.studentProfiles.unshift(p);
-              }
-              saveState(state);
-              renderProfileSupport();
-              renderActiveList();
-            }
-          } else if (data.action === "checkout" && data.payload) {
-            const rec = state.attendanceLog.find(r => r.id === data.payload.recordId || (r.status === "active" && r.studentName === data.payload.studentName));
-            if (rec && rec.status === "active") {
-              rec.status = "completed";
-              rec.checkOutTime = data.payload.checkOutTime || "Done";
-              rec.durationMinutes = data.payload.durationMinutes || 20;
-              saveState(state);
-              renderProfileSupport();
-              renderActiveList();
-            }
-          }
+          handleRemoteData(data);
         } catch (err) {}
       }
 
-      try {
-        const es = new EventSource(SYNC_URL + "/sse");
-        es.onmessage = (e) => {
-          try { handleRemoteMessage(JSON.parse(e.data)); } catch (err) {}
-        };
-      } catch (e) {}
+      let sse = null;
+      function connectSse() {
+        try {
+          if (sse) { try { sse.close(); } catch (e) {} }
+          sse = new EventSource(SYNC_URL + "/sse");
+          sse.onopen = () => updateSyncStatus(true);
+          sse.onmessage = (e) => {
+            try { handleRemoteMessage(JSON.parse(e.data)); } catch (err) {}
+          };
+          sse.onerror = () => {
+            updateSyncStatus(false);
+            try { sse.close(); } catch (e) {}
+            setTimeout(connectSse, 5000);
+          };
+        } catch (e) {
+          updateSyncStatus(false);
+          setTimeout(connectSse, 5000);
+        }
+      }
+      connectSse();
+
+      // 3. Rapid Polling Fallback (every 3.5s) to guarantee zero lost events on mobile
+      let lastPollTs = Math.floor(Date.now() / 1000) - 10;
+      setInterval(async () => {
+        try {
+          const res = await fetch(`${SYNC_URL}/json?since=${lastPollTs}`);
+          if (!res.ok) return;
+          const text = await res.text();
+          const lines = text.trim().split("\n");
+          for (const line of lines) {
+            if (!line) continue;
+            const msgObj = JSON.parse(line);
+            if (!msgObj || !msgObj.id || seenEventIds.has(msgObj.id)) continue;
+            seenEventIds.add(msgObj.id);
+            if (msgObj.time) lastPollTs = Math.max(lastPollTs, msgObj.time);
+            try {
+              const data = JSON.parse(msgObj.message || "{}");
+              handleRemoteData(data);
+            } catch (e) {}
+          }
+        } catch (e) {}
+      }, 3500);
 
       const params = new URLSearchParams(window.location.search);
       if (params.get("mode") === "out") setMode("out");

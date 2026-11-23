@@ -131,7 +131,10 @@
   // Load state from localStorage or fallback to window.MATH_LAB_DEFAULT_DATA
   function loadInitialState() {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      let saved = localStorage.getItem(STORAGE_KEY);
+      if (!saved) {
+        saved = localStorage.getItem("MATH319_LAB_DASHBOARD_STATE_V1");
+      }
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && parsed.tutors && parsed.parameters) {
@@ -1497,8 +1500,13 @@ function renderEditorTab() {
     return newProfile;
   }
 
-  function permanentlyDeleteStudentProfile(idx) {
-    if (idx < 0 || idx >= appData.studentProfiles.length) return;
+  function permanentlyDeleteStudentProfile(idxOrName, skipBroadcast) {
+    let idx = typeof idxOrName === "number" ? idxOrName : -1;
+    if (typeof idxOrName === "string") {
+      const clean = idxOrName.trim().toLowerCase();
+      idx = (appData.studentProfiles || []).findIndex(p => p.name.toLowerCase() === clean);
+    }
+    if (idx < 0 || idx >= (appData.studentProfiles || []).length) return;
     const removed = appData.studentProfiles.splice(idx, 1)[0];
     if (!removed) return;
     const targetLower = removed.name.toLowerCase();
@@ -1516,6 +1524,9 @@ function renderEditorTab() {
     }
     saveState(`🗑️ Permanently deleted student profile: ${removed.name}`);
     renderAll(false);
+    if (!skipBroadcast) {
+      broadcastCloudSync("delete_profile", { name: removed.name });
+    }
   }
 
   function openStudentBioModal(nameOrIdx) {
@@ -1664,9 +1675,10 @@ function renderEditorTab() {
     const container = document.getElementById(containerId);
     if (!container) return;
     const safeUrl = (url || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html").trim();
-    if (typeof qrcode === "function") {
+    const qrGenerator = (typeof qrcode === "function") ? qrcode : (typeof window !== "undefined" && typeof window.qrcode === "function" ? window.qrcode : (typeof globalThis !== "undefined" && typeof globalThis.qrcode === "function" ? globalThis.qrcode : null));
+    if (qrGenerator) {
       try {
-        const qr = qrcode(0, "M");
+        const qr = qrGenerator(0, "M");
         qr.addData(safeUrl);
         qr.make();
         container.innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
@@ -1674,13 +1686,14 @@ function renderEditorTab() {
         if (svgEl) {
           svgEl.setAttribute("width", "168");
           svgEl.setAttribute("height", "168");
+          svgEl.setAttribute("style", "max-width:100%;height:auto;display:block;border-radius:6px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.06));background:#fff;padding:4px;");
         }
         return;
       } catch (err) {
-        console.warn("SVG QR fallback:", err);
+        console.warn("SVG QR generator warning:", err);
       }
     }
-    container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=168x168&data=${encodeURIComponent(safeUrl)}" alt="${altText}" width="168" height="168" />`;
+    container.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=168x168&data=${encodeURIComponent(safeUrl)}" alt="${altText}" width="168" height="168" style="max-width:100%;height:auto;display:block;border-radius:6px;background:#fff;padding:4px;" />`;
   }
 
   function renderQrTab() {
@@ -1800,8 +1813,15 @@ function renderEditorTab() {
     }
 
     // 2. Render Both QR Code Graphics (QR #1 Check-In & QR #2 Check-Out) & URL inputs
-    const checkInUrl = (appData.qrConfig && appData.qrConfig.checkInUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in";
-    const checkOutUrl = (appData.qrConfig && appData.qrConfig.checkOutUrl) || "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out";
+    const defaultOrigin = (window.location.protocol.startsWith("http") && !window.location.hostname.includes("localhost") && !window.location.hostname.includes("127.0.0.1"))
+      ? window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, "")
+      : "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard";
+
+    const defaultCheckIn = defaultOrigin + "/checkin.html?mode=in";
+    const defaultCheckOut = defaultOrigin + "/checkin.html?mode=out";
+
+    const checkInUrl = (appData.qrConfig && appData.qrConfig.checkInUrl) || defaultCheckIn;
+    const checkOutUrl = (appData.qrConfig && appData.qrConfig.checkOutUrl) || defaultCheckOut;
     renderQrCodeToElement("qr-code-checkin-container", checkInUrl, "Math Lab Check-In QR Code");
     renderQrCodeToElement("qr-code-checkout-container", checkOutUrl, "Math Lab Check-Out QR Code");
 
@@ -1947,6 +1967,14 @@ function renderEditorTab() {
               }
               saveState(`🎉 Checked out ${rec.studentName} (+100 XP • ${mins} min session)!`);
               renderQrTab();
+              playChime("checkout");
+              broadcastCloudSync("checkout", {
+                recordId: rec.id,
+                studentName: rec.studentName,
+                checkOutTime: rec.checkOutTime,
+                durationMinutes: mins,
+                xpBonus: 100
+              });
             }
           });
         });
@@ -2348,6 +2376,212 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
       }
     };
     reader.readAsArrayBuffer(file);
+  }
+
+  // ========================================================================
+  // REAL-TIME CROSS-DEVICE CLOUD RELAY (Phone <-> Dashboard Instant Sync)
+  // ========================================================================
+  const SYNC_TOPIC = "emu_math319_lab_yusuf_2026_v2";
+  const SYNC_URL = "https://ntfy.sh/" + SYNC_TOPIC;
+  const DEVICE_ID = "dash-" + Math.random().toString(36).slice(2, 9);
+  const seenEventIds = new Set();
+  let syncBroadcastChannel = null;
+  try {
+    if (typeof BroadcastChannel === "function") {
+      syncBroadcastChannel = new BroadcastChannel("emu_math319_sync");
+    }
+  } catch (e) {}
+
+  function updateSyncStatusUi(connected) {
+    const badge = document.getElementById("qr-cloud-sync-status-badge");
+    if (!badge) return;
+    if (connected) {
+      badge.className = "badge badge-emerald";
+      badge.textContent = "🟢 Live Mobile Sync: Connected";
+    } else {
+      badge.className = "badge badge-amber";
+      badge.textContent = "🟡 Mobile Sync: Reconnecting...";
+    }
+  }
+
+  function playChime(type) {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const now = ctx.currentTime;
+      if (type === "checkout") {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.setValueAtTime(440.00, now + 0.12);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      } else {
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(783.99, now + 0.2);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+        osc.start(now);
+        osc.stop(now + 0.45);
+      }
+    } catch (e) {}
+  }
+
+  function broadcastCloudSync(actionType, payload) {
+    const msgBody = {
+      sender: DEVICE_ID,
+      ts: Date.now(),
+      action: actionType,
+      payload: payload
+    };
+    if (syncBroadcastChannel) {
+      try { syncBroadcastChannel.postMessage(msgBody); } catch (e) {}
+    }
+    try {
+      fetch(SYNC_URL, {
+        method: "POST",
+        headers: {
+          "Title": "EMU Math Lab Dashboard Event",
+          "Priority": "high"
+        },
+        body: JSON.stringify(msgBody)
+      }).catch(err => console.debug("Cloud sync post notice:", err));
+    } catch (e) {}
+  }
+
+  function handleIncomingSyncEvent(data) {
+    if (!data || data.sender === DEVICE_ID) return;
+    const action = data.action;
+    const payload = data.payload || {};
+
+    if (action === "checkin" && payload.record) {
+      const rec = payload.record;
+      if (!appData.attendanceLog.some(r => r.id === rec.id)) {
+        appData.attendanceLog.unshift(rec);
+        if (payload.profile) {
+          const p = payload.profile;
+          const existing = (appData.studentProfiles || []).find(x => x.name.toLowerCase() === (p.name || "").toLowerCase());
+          if (existing) {
+            Object.assign(existing, p);
+          } else {
+            appData.studentProfiles.unshift(p);
+          }
+        }
+        const day = rec.day || "Monday";
+        const hr = rec.hourBlock || "09:00";
+        const sub = rec.subject || "alg";
+        if (appData.qrConfig && appData.qrConfig.autoSyncArrivals !== false) {
+          if (appData.hourlyArrivals[day] && appData.hourlyArrivals[day][hr]) {
+            appData.hourlyArrivals[day][hr][sub] = (Number(appData.hourlyArrivals[day][hr][sub]) || 0) + 1;
+          }
+        }
+        saveState();
+        renderAll(true);
+        playChime("checkin");
+        showToast(`📱 Live Mobile Check-In: ${rec.studentName} checked in to ${rec.courseCode}! +${rec.xpEarned || 50} XP`);
+      }
+    } else if (action === "checkout") {
+      const recordId = payload.recordId;
+      const studentName = payload.studentName;
+      const rec = appData.attendanceLog.find(r => r.id === recordId || (r.status === "active" && (r.studentName || "").toLowerCase() === (studentName || "").toLowerCase()));
+      if (rec && rec.status === "active") {
+        rec.status = "completed";
+        rec.checkOutTime = payload.checkOutTime || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        rec.durationMinutes = payload.durationMinutes || 20;
+        rec.xpEarned = (rec.xpEarned || 50) + (payload.xpBonus || 100);
+
+        const prof = findOrCreateStudentProfile(rec.studentName, true);
+        if (prof) {
+          prof.xp = (Number(prof.xp) || 0) + (payload.xpBonus || 100);
+          prof.totalMinutes = (Number(prof.totalMinutes) || 0) + rec.durationMinutes;
+          if (prof.totalMinutes >= 100 && !(prof.badges || []).includes("⏱️ 100+ Min Club")) {
+            prof.badges.push("⏱️ 100+ Min Club");
+          }
+        }
+        saveState();
+        renderAll(true);
+        playChime("checkout");
+        showToast(`👋 Live Mobile Check-Out: ${rec.studentName} completed visit (${rec.durationMinutes} min)!`);
+      }
+    } else if (action === "bio_update" && payload.profile) {
+      const p = payload.profile;
+      const existing = (appData.studentProfiles || []).find(x => x.name.toLowerCase() === (p.name || "").toLowerCase());
+      if (existing) {
+        Object.assign(existing, p);
+      } else {
+        appData.studentProfiles.unshift(p);
+      }
+      saveState();
+      renderQrTab();
+      showToast(`📝 Updated student profile: ${p.name}`);
+    } else if (action === "delete_profile" && payload.name) {
+      permanentlyDeleteStudentProfile(payload.name, true);
+      showToast(`🗑️ Student profile removed: ${payload.name}`);
+    }
+  }
+
+  let sseClient = null;
+  function initCrossDeviceCloudSync() {
+    if (syncBroadcastChannel) {
+      syncBroadcastChannel.onmessage = (e) => {
+        try { handleIncomingSyncEvent(e.data); } catch (err) {}
+      };
+    }
+
+    function connectSse() {
+      try {
+        if (sseClient) { try { sseClient.close(); } catch (e) {} }
+        sseClient = new EventSource(SYNC_URL + "/sse");
+        sseClient.onopen = () => updateSyncStatusUi(true);
+        sseClient.onmessage = (e) => {
+          try {
+            const raw = JSON.parse(e.data);
+            if (!raw || !raw.id || seenEventIds.has(raw.id)) return;
+            seenEventIds.add(raw.id);
+            const data = JSON.parse(raw.message || "{}");
+            handleIncomingSyncEvent(data);
+          } catch (err) {}
+        };
+        sseClient.onerror = () => {
+          updateSyncStatusUi(false);
+          try { sseClient.close(); } catch (e) {}
+          setTimeout(connectSse, 5000);
+        };
+      } catch (e) {
+        updateSyncStatusUi(false);
+        setTimeout(connectSse, 5000);
+      }
+    }
+    connectSse();
+
+    let lastPollTs = Math.floor(Date.now() / 1000) - 10;
+    setInterval(async () => {
+      try {
+        const res = await fetch(`${SYNC_URL}/json?since=${lastPollTs}`);
+        if (!res.ok) return;
+        const text = await res.text();
+        const lines = text.trim().split("\n");
+        for (const line of lines) {
+          if (!line) continue;
+          const msgObj = JSON.parse(line);
+          if (!msgObj || !msgObj.id || seenEventIds.has(msgObj.id)) continue;
+          seenEventIds.add(msgObj.id);
+          if (msgObj.time) lastPollTs = Math.max(lastPollTs, msgObj.time);
+          try {
+            const data = JSON.parse(msgObj.message || "{}");
+            handleIncomingSyncEvent(data);
+          } catch (e) {}
+        }
+      } catch (e) {}
+    }, 3500);
   }
 
   // ==========================================================================
@@ -2796,6 +3030,7 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
 
     document.getElementById("btn-reset-defaults").addEventListener("click", () => {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("MATH319_LAB_DASHBOARD_STATE_V1");
       appData = clone(window.MATH_LAB_DEFAULT_DATA);
       customPrototypeXt = {};
       syncSlidersToUI();
@@ -2883,6 +3118,8 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         qrNameInput.removeAttribute("aria-invalid");
         saveState(`🎉 Checked in ${prof.name} at ${hr}! +${earnedXp} XP ${isQuietBonus ? "(⚡ 2x Quiet-Hour Bonus!)" : ""} & 🔥 ${prof.streak}-Visit Streak!`);
         renderAll(true);
+        playChime("checkin");
+        broadcastCloudSync("checkin", { record: newRec, profile: prof });
       });
     }
 
@@ -3003,6 +3240,7 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
           bioDialog.close();
           saveState(`💾 Saved Student Bio & 16-Bit Avatar for ${prof.name}!`);
           renderQrTab();
+          broadcastCloudSync("bio_update", { profile: prof });
         });
       }
 
@@ -3195,6 +3433,9 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         showToast("Synced live student QR Check-In / Check-Out!");
       }
     });
+
+    // Start Cross-Device Real-Time Cloud Sync (ntfy.sh SSE + BroadcastChannel)
+    initCrossDeviceCloudSync();
 
     syncSlidersToUI();
   }

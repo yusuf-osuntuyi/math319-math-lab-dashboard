@@ -12,8 +12,13 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- SheetJS (xlsx) for Direct Excel File Import/Export -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- Lightweight QR Code SVG Generator -->
-  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <!-- Lightweight Zero-Lag Vector QR Code Generator (Local + Fallback) -->
+  <script src="qrcode.min.js"></script>
+  <script>
+    if (typeof qrcode === "undefined") {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"><\/script>');
+    }
+  </script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -498,7 +503,10 @@
             <h2>⚡ Live Math Lab Busyness Forecast &amp; 2x Double XP Quiet-Hour Bonus</h2>
             <p>Gamifies your model's <strong>Quiet-Hour Demand Nudge</strong>: students who check in during green quiet hours (9:00 AM, 11:00 AM, or 4:00 PM) earn <strong>+100 XP (2x Bonus!)</strong> and the <em>⚡ 2x Quiet-Hour Strategist</em> badge. Click any hour below to set the active check-in hour:</p>
           </div>
-          <span class="badge badge-emerald" id="qr-active-hour-bonus-badge">Active Check-In Hour: 10:00 AM (+50 XP)</span>
+          <div style="display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">
+            <span class="badge badge-emerald" id="qr-cloud-sync-status-badge" title="Live Phone <-> Dashboard Cloud Relay Active">🟢 Live Mobile Sync: Connected</span>
+            <span class="badge badge-emerald" id="qr-active-hour-bonus-badge">Active Check-In Hour: 10:00 AM (+50 XP)</span>
+          </div>
         </div>
         <div class="busyness-bar-grid" id="qr-busyness-bar-grid"></div>
       </div>
