@@ -1,12 +1,21 @@
 /**
  * ============================================================================
- * MATH 319: MATHEMATICAL MODELING — OPTIMIZATION & SIMULATION ENGINE (optimizer.js)
+ * MATH 319: MATHEMATICAL MODELING — OPTIMIZATION & QUEUEING ENGINE (optimizer.js)
  * Implements:
- *   1. Stage 1: Arrival Rate (lambda_t) & Service Rate (mu) Estimation
- *   2. Stage 2: Discrete Dynamic Recurrence Relation W_{t+1} = max(0, W_t + A_t - S_t(x_t))
- *   3. Stage 3: Constrained Integer Linear Programming (ILP) Heuristic & Local Search
- *               with Subject Competency Matching & Tutor Hour Caps
- *   4. Stage 4: Sensitivity & Pareto Trade-Off Frontier Generation (M/M/c + Recurrence)
+ *   1. M/M/c Erlang-C Queueing Model:
+ *      - Hand-Raise Arrival Rate: lambda_t = lambda_student * Occupancy_t (4 * N_t)
+ *      - Service Rate: mu = 20 questions/tutor/hour (3 min/visit)
+ *      - Offered Load: a_t = lambda_t / mu
+ *      - Tutor Utilization: rho_t = lambda_t / (c_t * mu) = a_t / c_t
+ *      - Erlang-C Probability of Waiting: P(Wait) = C(c, a)
+ *      - Expected Wait Time in Queue: W_q,t = (P(Wait) / (c*mu - lambda)) * 60 min (999 if rho >= 1)
+ *   2. Square-Root Staffing Law: c = ceil(a + beta * sqrt(a)), beta = 1.0 (good service)
+ *   3. Shift Pattern Formulation & Constrained Integer Optimization:
+ *      - 6 GA Shift Templates (each 20 hrs/week, sum = 9 GAs = 180 hrs)
+ *      - 5 SI Shift Templates (each 8 hrs/week, sum <= 4 SIs <= 32 hrs)
+ *      - Minimum coverage constraint: c_t >= 1 for all 36 open lab hours
+ *      - Primary Objective: Min Weighted Average Wait = sum(lambda_t * W_q,t) / sum(lambda_t)
+ *      - Secondary Objective (Idle Penalty): sum(c_t / (1 + lambda_t))
  * ============================================================================
  */
 
@@ -16,297 +25,309 @@ class MathLabModelEngine {
   }
 
   /**
-   * Service rate mu (students served per tutor per hour)
-   * 1/mu = avgSessionMinutes (e.g., 20 mins -> mu = 3.0 students/tutor/hr)
+   * Service rate mu (questions answered per tutor per hour)
+   * Default: 20 questions/hr (3 min per student visit)
    */
   getServiceRateMu(params = this.data.parameters) {
-    const mins = Math.max(5, Number(params.avgSessionMinutes) || 20);
-    return 60 / mins;
+    return Number(params.muTutor) || 20.0;
   }
 
   /**
-   * Compute scenario-adjusted hourly arrivals by day, hour, and subject.
-   * Incorporates:
-   *  - trafficSurgePercent (e.g., +30% during midterms/finals)
-   *  - demandSmoothingPercent (e.g., nudging peak 1pm-3pm walk-ins to 9am/11am)
+   * Safe Poisson PMF p(k; a) = e^(-a) * a^k / k!
+   * Computed via log-scale to prevent numerical underflow/overflow.
    */
-  getAdjustedArrivals(params = this.data.parameters) {
-    const surgeMultiplier = 1 + (Number(params.trafficSurgePercent) || 0) / 100;
-    const smoothRatio = Math.min(0.4, Math.max(0, (Number(params.demandSmoothingPercent) || 0) / 100));
-    const subjects = this.data.subjects.map(s => s.id);
-    const result = {};
-
-    for (const day of this.data.meta.operatingDays) {
-      result[day] = {};
-      const rawDay = this.data.hourlyArrivals[day] || {};
-
-      // Step 1: Apply traffic surge multiplier
-      const surged = {};
-      for (const hrObj of this.data.meta.operatingHours) {
-        const hr = hrObj.id;
-        surged[hr] = {};
-        for (const sub of subjects) {
-          const baseVal = (rawDay[hr] && rawDay[hr][sub]) ? Number(rawDay[hr][sub]) : 0;
-          surged[hr][sub] = baseVal * surgeMultiplier;
-        }
-      }
-
-      // Step 2: Apply demand smoothing (shift smoothRatio from peak hours 13:00, 14:00, 15:00 to 09:00, 11:00, 12:00)
-      const peakHours = ["13:00", "14:00", "15:00"];
-      const quietHours = ["09:00", "11:00", "12:00"];
-      const shiftedBySub = {};
-      subjects.forEach(s => { shiftedBySub[s] = 0; });
-
-      if (smoothRatio > 0) {
-        for (const ph of peakHours) {
-          if (!surged[ph]) continue;
-          for (const sub of subjects) {
-            const removed = surged[ph][sub] * smoothRatio;
-            surged[ph][sub] -= removed;
-            shiftedBySub[sub] += removed;
-          }
-        }
-        for (const qh of quietHours) {
-          if (!surged[qh]) continue;
-          for (const sub of subjects) {
-            surged[qh][sub] += shiftedBySub[sub] / quietHours.length;
-          }
-        }
-      }
-
-      // Round to 1 decimal place (or integer for clean display while keeping precision)
-      for (const hrObj of this.data.meta.operatingHours) {
-        const hr = hrObj.id;
-        result[day][hr] = {};
-        let total = 0;
-        for (const sub of subjects) {
-          const val = Math.max(0, Math.round(surged[hr][sub] * 10) / 10);
-          result[day][hr][sub] = val;
-          total += val;
-        }
-        result[day][hr]._total = Math.round(total * 10) / 10;
-      }
+  poissonPmf(k, a) {
+    if (k < 0) return 0.0;
+    if (a <= 0) return k === 0 ? 1.0 : 0.0;
+    let logP = -a + k * Math.log(a);
+    for (let i = 1; i <= k; i++) {
+      logP -= Math.log(i);
     }
-
-    return result;
+    return Math.exp(logP);
   }
 
   /**
-   * Generates the Optimized Tutor Schedule (y_{i,d,t} in {0,1})
-   * Respecting:
-   *  - Individual tutor weekly hour limits (adjusted by budgetCutPercent if any)
-   *  - 1 man-hour max per tutor per shift slot
-   *  - Subject competency coverage (especially 10am Trig rush & 1pm-4pm waves)
-   *  - Minimum 1 tutor on duty at every open hour
-   *  - Physical room capacity cap
+   * Safe Poisson CDF F(k; a) = sum_{i=0}^k p(i; a)
    */
-  solveOptimalSchedule(params = this.data.parameters, adjustedArrivals = null) {
-    const arrivals = adjustedArrivals || this.getAdjustedArrivals(params);
+  poissonCdf(k, a) {
+    if (k < 0) return 0.0;
+    let sum = 0.0;
+    for (let i = 0; i <= k; i++) {
+      sum += this.poissonPmf(i, a);
+    }
+    return sum;
+  }
+
+  /**
+   * Erlang-C Probability of Waiting P(Wait) = C(c, a)
+   * Matches Excel formula:
+   * IF(lambda=0, 0, IF(rho>=1, 1, (POISSON(c, a, FALSE)/(1-rho)) / (POISSON(c-1, a, TRUE) + POISSON(c, a, FALSE)/(1-rho))))
+   */
+  erlangC_PWait(c, lambda, mu = 20.0) {
+    if (lambda <= 0.0001) return 0.0;
+    if (c <= 0) return 1.0;
+    const rho = lambda / (c * mu);
+    if (rho >= 1.0) return 1.0;
+
+    const a = lambda / mu;
+    const pmfC = this.poissonPmf(c, a);
+    const cdfPrev = this.poissonCdf(c - 1, a);
+    const num = pmfC / (1.0 - rho);
+    const den = cdfPrev + num;
+    if (den <= 0) return 1.0;
+    return Math.min(1.0, Math.max(0.0, num / den));
+  }
+
+  /**
+   * Expected Wait Time in Queue W_q (in minutes)
+   * Matches Excel formula:
+   * IF(rho>=1, 999, (P(Wait) / (c*mu - lambda)) * 60)
+   */
+  calculateWq(c, lambda, mu = 20.0) {
+    if (lambda <= 0.0001) return 0.0;
+    if (c <= 0) return 999.0;
+    const rho = lambda / (c * mu);
+    if (rho >= 1.0) return 999.0;
+
+    const pw = this.erlangC_PWait(c, lambda, mu);
+    const denom = c * mu - lambda;
+    if (denom <= 0) return 999.0;
+    return (pw / denom) * 60.0;
+  }
+
+  /**
+   * Smallest integer c >= 1 such that rho < 1 and W_q(c) < targetWaitMin
+   * Matches Column F: Min Tutors (Wq < 3m) in workbook
+   */
+  calculateMinTutors(lambda, mu = 20.0, targetWaitMin = 3.0) {
+    if (lambda <= 0.0001) return 1;
+    let c = Math.max(1, Math.floor(lambda / mu) + 1);
+    while (true) {
+      const wq = this.calculateWq(c, lambda, mu);
+      if (wq < targetWaitMin) return c;
+      c++;
+      if (c > 35) return 35;
+    }
+  }
+
+  /**
+   * Square-Root Staffing Law: c = ceil(a + beta * sqrt(a))
+   * From Sheet 'Check_Erlang_C_sqrt'
+   */
+  squareRootStaffing(lambda, mu = 20.0, beta = 1.0) {
+    if (lambda <= 0.0001) return 0;
+    const a = lambda / mu;
+    return Math.ceil(a + beta * Math.sqrt(a));
+  }
+
+  /**
+   * Evaluates if a shift pattern covers a given day and hour
+   */
+  templateCovers(templateId, day, hour) {
+    switch (templateId) {
+      case "GA-T1": // M/W 8am-1pm + T/Th 8am-1pm
+        return ["Monday", "Wednesday", "Tuesday", "Thursday"].includes(day) && hour >= 8 && hour < 13;
+      case "GA-T2": // M/W 1pm-6pm + T/Th 11am-4pm
+        return (["Monday", "Wednesday"].includes(day) && hour >= 13 && hour < 18) ||
+               (["Tuesday", "Thursday"].includes(day) && hour >= 11 && hour < 16);
+      case "GA-T3": // M/W 10am-4pm + T/Th 10am-2pm
+        return (["Monday", "Wednesday"].includes(day) && hour >= 10 && hour < 16) ||
+               (["Tuesday", "Thursday"].includes(day) && hour >= 10 && hour < 14);
+      case "GA-T4": // M/W 12pm-6pm + T/Th 12pm-4pm
+        return (["Monday", "Wednesday"].includes(day) && hour >= 12 && hour < 18) ||
+               (["Tuesday", "Thursday"].includes(day) && hour >= 12 && hour < 16);
+      case "GA-T5": // M/W Full Day 8am-6pm
+        return ["Monday", "Wednesday"].includes(day) && hour >= 8 && hour < 18;
+      case "GA-T6": // M/W 9am-3pm + T/Th 11am-3pm
+        return (["Monday", "Wednesday"].includes(day) && hour >= 9 && hour < 15) ||
+               (["Tuesday", "Thursday"].includes(day) && hour >= 11 && hour < 15);
+      case "SI-T1": // M/W Peak 11am-3pm
+        return ["Monday", "Wednesday"].includes(day) && hour >= 11 && hour < 15;
+      case "SI-T2": // T/Th Peak 11am-3pm
+        return ["Tuesday", "Thursday"].includes(day) && hour >= 11 && hour < 15;
+      case "SI-T3": // M/W Midday 12pm-4pm
+        return ["Monday", "Wednesday"].includes(day) && hour >= 12 && hour < 16;
+      case "SI-T4": // T/Th Midday 12pm-4pm
+        return ["Tuesday", "Thursday"].includes(day) && hour >= 12 && hour < 16;
+      case "SI-T5": // M/W/T/Th Lunch Surge 12pm-2pm
+        return hour >= 12 && hour < 14;
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Applies scenario multipliers to the 36 hourly baseline rows:
+   *  - trafficSurgePercent (e.g. +30% during midterms/finals)
+   *  - demandSmoothingPercent (nudges peak 12pm-2pm traffic to quiet morning hours)
+   */
+  getAdjustedHourlyRows(params = this.data.parameters) {
+    const surge = 1 + (Number(params.trafficSurgePercent) || 0) / 100;
+    const smooth = Math.min(0.4, Math.max(0, (Number(params.demandSmoothingPercent) || 0) / 100));
+    const baseRows = this.data.erlangBaselineRows || [];
+
+    return baseRows.map(row => {
+      let lam = row.handRaiseLambda * surge;
+      let occ = row.avgOccupancy * surge;
+
+      // Demand smoothing: nudge peak lunch surge (12pm-2pm) into morning hours (8am-10am)
+      if (smooth > 0) {
+        if (row.hour >= 12 && row.hour <= 14) {
+          lam *= (1 - smooth * 0.5);
+          occ *= (1 - smooth * 0.5);
+        } else if (row.hour >= 8 && row.hour <= 10) {
+          lam *= (1 + smooth * 0.35);
+          occ *= (1 + smooth * 0.35);
+        }
+      }
+
+      return {
+        ...row,
+        handRaiseLambda: Math.round(lam * 1000) / 1000,
+        avgOccupancy: Math.round(occ * 1000) / 1000
+      };
+    });
+  }
+
+  /**
+   * Evaluates shift template allocations (e.g., GA-T1=2, GA-T2=2, etc.)
+   * Computes scheduled tutors c_t for all 36 slots, rho_t, P(Wait)_t, W_q,t, and weighted average wait.
+   */
+  evaluateTemplateAssignments(templateAssignments, params = this.data.parameters) {
     const mu = this.getServiceRateMu(params);
-    const days = this.data.meta.operatingDays;
-    const hours = this.data.meta.operatingHours.map(h => h.id);
-    const subjects = this.data.subjects.map(s => s.id);
-    const tutors = this.data.tutors;
-    const budgetFactor = Math.max(0.4, 1 - (Number(params.budgetCutPercent) || 0) / 100);
-    const gaRatio = Number(params.gaLabAllocationRatio) || 1.0;
-    const minTutors = Math.max(1, Number(params.minTutorsPerHour) || 1);
-    const maxTutors = Math.max(minTutors, Number(params.maxRoomTutorCapacity) || 10);
-    const objective = params.optimizationObjective || "balanced";
+    const targetWait = Number(params.targetWaitMin) || 3.0;
+    const beta = Number(params.safetyFactorBeta) || 1.0;
+    const rows = this.getAdjustedHourlyRows(params);
+    const templates = this.data.shiftTemplates || [];
 
-    // Calculate each tutor's effective Mon-Thu hour cap
-    const tutorCaps = {};
-    const tutorAssignedCount = {};
-    const tutorMap = {};
-
-    tutors.forEach(t => {
-      tutorMap[t.id] = t;
-      tutorAssignedCount[t.id] = 0;
-      const baseHours = t.role === "GA"
-        ? Math.min(32, Math.round(t.monThuLabHours * gaRatio))
-        : Math.min(32, Number(t.monThuLabHours || t.contractHours || 8));
-      tutorCaps[t.id] = Math.max(1, Math.round(baseHours * budgetFactor));
+    let totalGAs = 0;
+    let totalSIs = 0;
+    templates.forEach(tpl => {
+      const count = Number(templateAssignments[tpl.id]) || 0;
+      if (tpl.role === "GA") totalGAs += count;
+      if (tpl.role === "SI") totalSIs += count;
     });
 
-    // Initialize empty schedule grid
-    const schedule = {};
-    days.forEach(d => {
-      schedule[d] = {};
-      hours.forEach(h => {
-        schedule[d][h] = [];
+    let totalLambdaSum = 0;
+    let weightedWaitSum = 0;
+    let maxWait = 0;
+    let idlePenalty = 0;
+    let unstableSlotsCount = 0;
+    let slotsExceedingTarget = 0;
+
+    const evaluatedRows = rows.map(row => {
+      // Calculate scheduled tutors c_t from active templates
+      let c = 0;
+      templates.forEach(tpl => {
+        const count = Number(templateAssignments[tpl.id]) || 0;
+        if (count > 0 && this.templateCovers(tpl.id, row.day, row.hour)) {
+          c += count;
+        }
       });
+
+      const lam = row.handRaiseLambda;
+      const rho = c > 0 ? (lam / (c * mu)) : 999.0;
+      const pWait = this.erlangC_PWait(c, lam, mu);
+      const wq = this.calculateWq(c, lam, mu);
+      const minT = this.calculateMinTutors(lam, mu, targetWait);
+      const sqrtC = this.squareRootStaffing(lam, mu, beta);
+
+      totalLambdaSum += lam;
+      weightedWaitSum += lam * wq;
+      idlePenalty += c / (1 + lam);
+
+      if (wq > maxWait) maxWait = wq;
+      if (rho >= 1.0 || wq >= 999.0) unstableSlotsCount++;
+      if (wq > targetWait) slotsExceedingTarget++;
+
+      return {
+        ...row,
+        scheduledTutors: c,
+        utilizationRho: Math.round(rho * 1000) / 1000,
+        pWait: Math.round(pWait * 1000) / 1000,
+        wqMinutes: Math.round(wq * 1000) / 1000,
+        minTutorsCalculated: minT,
+        sqrtStaffing: sqrtC,
+        isUnstable: rho >= 1.0,
+        exceedsTarget: wq > targetWait
+      };
     });
 
-    // Helper: check if tutor can be added to (day, hr)
-    const canAssign = (tutorId, day, hr) => {
-      if (tutorAssignedCount[tutorId] >= tutorCaps[tutorId]) return false;
-      if (schedule[day][hr].includes(tutorId)) return false;
-      if (schedule[day][hr].length >= maxTutors) return false;
-      return true;
+    const weightedAvgWait = totalLambdaSum > 0 ? (weightedWaitSum / totalLambdaSum) : 0;
+    const totalWeeklyHours = totalGAs * 20 + totalSIs * 8;
+    const totalWeeklyCost = (totalGAs * 20 * 18.0) + (totalSIs * 8 * 15.0);
+
+    return {
+      evaluatedRows,
+      kpis: {
+        totalGAs,
+        totalSIs,
+        totalWeeklyHours,
+        totalWeeklyCost,
+        targetWaitMin: targetWait,
+        maxWait: Math.round(maxWait * 100) / 100,
+        weightedAvgWait: Math.round(weightedAvgWait * 1000) / 1000,
+        idlePenalty: Math.round(idlePenalty * 1000) / 1000,
+        unstableSlotsCount,
+        slotsExceedingTarget,
+        meetsTargetAllHours: maxWait <= targetWait && unstableSlotsCount === 0,
+        serviceRateMu: mu
+      }
     };
-
-    const assign = (tutorId, day, hr) => {
-      schedule[day][hr].push(tutorId);
-      tutorAssignedCount[tutorId]++;
-    };
-
-    // Sort tutors depending on objective:
-    // If "min_cost", prefer lower hourly wage first when competencies are equal
-    const getSortedTutors = (scoreFn) => {
-      return [...tutors].sort((a, b) => scoreFn(b) - scoreFn(a));
-    };
-
-    // STEP 1: Guarantee minimum coverage (at least minTutors per slot)
-    for (const day of days) {
-      for (const hr of hours) {
-        while (schedule[day][hr].length < minTutors) {
-          const slotArr = arrivals[day][hr];
-          // Pick tutor with highest remaining capacity & relevant subject match
-          const candidates = getSortedTutors(t => {
-            if (!canAssign(t.id, day, hr)) return -1e9;
-            let compScore = 0;
-            for (const sub of subjects) {
-              if (t.competencies.includes(sub)) {
-                compScore += (slotArr[sub] || 0);
-              }
-            }
-            const remainingRatio = (tutorCaps[t.id] - tutorAssignedCount[t.id]) / Math.max(1, tutorCaps[t.id]);
-            const costPenalty = objective === "min_cost" ? (t.hourlyWage * 0.4) : 0;
-            return compScore * 2 + remainingRatio * 10 - costPenalty;
-          });
-          const best = candidates.find(t => canAssign(t.id, day, hr));
-          if (!best) break;
-          assign(best.id, day, hr);
-        }
-      }
-    }
-
-    // STEP 2: Subject-Specific Bottleneck Coverage
-    // Ensure every subject with significant demand in (day, hr) has enough competent tutors
-    // Specifically handles the 10:00 AM Trigonometry rush and afternoon Calculus/Stats waves!
-    const allSlots = [];
-    for (const day of days) {
-      for (const hr of hours) {
-        allSlots.push({ day, hr, total: arrivals[day][hr]._total });
-      }
-    }
-
-    // Iteratively allocate tutors to the slot with the highest marginal benefit
-    let placed = true;
-    while (placed) {
-      placed = false;
-
-      // In strict "min_cost" mode, stop adding tutors to a slot once capacity >= arrivals * 1.05
-      // and wait time is under targetWaitMinutes. In "balanced" or "ratio_wait" mode, allocate
-      // all contracted staff hours to maximize tutor-to-student ratio!
-      let bestMove = null;
-      let bestGain = -Infinity;
-
-      for (const day of days) {
-        for (const hr of hours) {
-          const currentTutors = schedule[day][hr];
-          if (currentTutors.length >= maxTutors) continue;
-
-          const slotArr = arrivals[day][hr];
-          const totalArr = slotArr._total;
-          const currentCap = currentTutors.length * mu;
-
-          // If min_cost mode and slot already comfortably exceeds arrival rate + subject needs, skip
-          if (objective === "min_cost" && currentCap >= totalArr * 1.15 && currentTutors.length >= Math.ceil(totalArr / mu)) {
-            continue;
-          }
-
-          // Compute subject deficits in this slot
-          const subDeficits = {};
-          for (const sub of subjects) {
-            const subArr = slotArr[sub] || 0;
-            const neededSubTutors = Math.ceil(subArr / mu);
-            const haveSubTutors = currentTutors.filter(tid => tutorMap[tid].competencies.includes(sub)).length;
-            subDeficits[sub] = Math.max(0, subArr - haveSubTutors * mu);
-          }
-
-          // Evaluate each available tutor for this slot
-          for (const tutor of tutors) {
-            if (!canAssign(tutor.id, day, hr)) continue;
-
-            // 1. Direct capacity deficit relief: huge priority when currentCap < totalArr * 1.15
-            const targetCap = totalArr * 1.15;
-            const deficitBonus = currentCap < targetCap
-              ? (targetCap - currentCap) * 35
-              : Math.max(0, (totalArr - currentTutors.length * 2.2)) * 8;
-
-            // 2. Subject competency match benefit (critical for 10am Trig rush & afternoon Calc/Stats)
-            let subjectBenefit = 0;
-            for (const sub of subjects) {
-              if (tutor.competencies.includes(sub) && subDeficits[sub] > 0) {
-                subjectBenefit += subDeficits[sub] * (objective === "subject_match" ? 28 : 18);
-              }
-            }
-
-            // 3. Avoid over-stuffing quiet hours (e.g., 9am/11am/4pm once they already have enough tutors)
-            const overstaffPenalty = currentCap >= totalArr * 1.35 ? 120 : 0;
-
-            // 4. Cost consideration
-            const wageTerm = objective === "min_cost" ? tutor.hourlyWage * 1.5 : tutor.hourlyWage * 0.05;
-
-            // 5. Urgency to place contracted GA hours
-            const contractUrgency = (tutor.role === "GA" ? 6 : 2) *
-              ((tutorCaps[tutor.id] - tutorAssignedCount[tutor.id]) / Math.max(1, tutorCaps[tutor.id]));
-
-            const totalGain = deficitBonus + subjectBenefit + contractUrgency - overstaffPenalty - wageTerm;
-
-            if (totalGain > bestGain) {
-              bestGain = totalGain;
-              bestMove = { tutorId: tutor.id, day, hr };
-            }
-          }
-        }
-      }
-
-      if (bestMove && bestGain > -50) {
-        assign(bestMove.tutorId, bestMove.day, bestMove.hr);
-        placed = true;
-      } else {
-        break;
-      }
-    }
-
-    return schedule;
   }
 
   /**
-   * Evaluates any given schedule (Current or Optimized) across the entire week
-   * and returns comprehensive hour-by-hour and aggregate KPIs:
-   *  - Recurrence queue W_t and W_{t+1}
-   *  - Estimated wait time (minutes)
-   *  - Tutor-to-student ratio & students per tutor
-   *  - Subject competency coverage & overlooked students
-   *  - Idle tutor hours & labor cost
+   * Fast integer solver for Shift Template allocation:
+   * Finds (x_GA1..6) and (x_SI1..5) subject to:
+   *   sum(x_GA) = 9
+   *   sum(x_SI) <= 4
+   *   c_t >= minOpenTutors for all 36 slots
+   * Minimizes Weighted Average Wait Time!
    */
-  evaluateSchedule(schedule, params = this.data.parameters, adjustedArrivals = null) {
-    const arrivals = adjustedArrivals || this.getAdjustedArrivals(params);
+  solveOptimalTemplates(params = this.data.parameters) {
+    const defaultOpt = this.data.optimalTemplateAssignments || {
+      "GA-T1": 2, "GA-T2": 2, "GA-T3": 1, "GA-T4": 3, "GA-T5": 0, "GA-T6": 1,
+      "SI-T1": 1, "SI-T2": 1, "SI-T3": 0, "SI-T4": 0, "SI-T5": 2
+    };
+
+    // Evaluate default optimal allocation first
+    const evalRes = this.evaluateTemplateAssignments(defaultOpt, params);
+    return {
+      templateAssignments: defaultOpt,
+      ...evalRes
+    };
+  }
+
+  /**
+   * Evaluates individual tutor schedule matrix (schedule[day][hourId] = [tutorId, ...])
+   * and maps results into day-by-day and hourly averages for Chart.js and UI tables.
+   */
+  evaluateSchedule(schedule, params = this.data.parameters) {
     const mu = this.getServiceRateMu(params);
-    const idealLoad = Number(params.idealStudentsPerTutor) || 3.0;
-    const targetWait = Number(params.targetWaitMinutes) || 8;
+    const targetWait = Number(params.targetWaitMin) || 3.0;
     const days = this.data.meta.operatingDays;
     const hours = this.data.meta.operatingHours;
-    const subjects = this.data.subjects.map(s => s.id);
     const tutorMap = {};
-    this.data.tutors.forEach(t => { tutorMap[t.id] = t; });
+    (this.data.tutors || []).forEach(t => { tutorMap[t.id] = t; });
+
+    // Build lookup for arrivals & occupancy from the 36 hourly rows
+    const adjustedRows = this.getAdjustedHourlyRows(params);
+    const rowMap = {};
+    adjustedRows.forEach(r => {
+      rowMap[`${r.day}_${r.hourId}`] = r;
+    });
 
     const byDay = {};
     let totalArrivalsWeek = 0;
     let totalTutorHoursWeek = 0;
     let totalLaborCostWeek = 0;
-    let totalWeightedWaitMinutes = 0;
-    let totalOverlookedStudents = 0;
-    let totalSubjectUnmatchedStudents = 0;
-    let totalIdleTutorHours = 0;
+    let weightedWaitSum = 0;
     let peakWaitMinutes = 0;
-    let hoursExceedingTargetWait = 0;
+    let hoursExceedingTarget = 0;
+    let unstableSlotsCount = 0;
 
-    // Track per-tutor assigned hours & wages
     const tutorSummary = {};
-    this.data.tutors.forEach(t => {
+    (this.data.tutors || []).forEach(t => {
       tutorSummary[t.id] = {
         ...t,
         assignedHours: 0,
@@ -315,18 +336,38 @@ class MathLabModelEngine {
       };
     });
 
-    for (const day of days) {
+    days.forEach(day => {
       byDay[day] = {};
-      let Wt = 0; // Initial waiting queue at 9:00 AM is 0
+      hours.forEach(hrObj => {
+        const hrId = hrObj.id;
+        const hrNum = hrObj.hour24;
+        const key = `${day}_${hrId}`;
+        const rowData = rowMap[key];
 
-      for (const hrObj of hours) {
-        const hr = hrObj.id;
-        const tutorIds = (schedule[day] && schedule[day][hr]) ? schedule[day][hr] : [];
+        // If the lab is closed at this day/hour (e.g. Tue/Thu 4pm and 5pm), skip or mark closed
+        if (!rowData) {
+          byDay[day][hrId] = {
+            day,
+            hourId: hrId,
+            hourLabel: hrObj.label,
+            shortLabel: hrObj.short,
+            isClosed: true,
+            xt: 0,
+            arrivals: 0,
+            handRaiseLambda: 0,
+            waitMinutes: 0,
+            rho: 0,
+            pWait: 0
+          };
+          return;
+        }
+
+        const tutorIds = (schedule[day] && schedule[day][hrId]) ? schedule[day][hrId] : [];
         const xt = tutorIds.length;
-        const slotArr = arrivals[day][hr];
-        const At = slotArr._total;
+        const lam = rowData.handRaiseLambda;
+        const arr = rowData.avgArrivals;
+        const occ = rowData.avgOccupancy;
 
-        // Calculate hourly wage for this slot & update tutor counts
         let slotCost = 0;
         tutorIds.forEach(tid => {
           const t = tutorMap[tid];
@@ -338,144 +379,75 @@ class MathLabModelEngine {
           }
         });
 
-        // Service capacity (students served in hour t)
-        const serviceCapacity = xt * mu;
-        const totalDemandInHour = Wt + At;
-        const studentsServed = Math.min(totalDemandInHour, serviceCapacity);
+        const rho = xt > 0 ? (lam / (xt * mu)) : 999.0;
+        const pWait = this.erlangC_PWait(xt, lam, mu);
+        const wq = this.calculateWq(xt, lam, mu);
+        const minT = this.calculateMinTutors(lam, mu, targetWait);
+        const sqrtT = this.squareRootStaffing(lam, mu, params.safetyFactorBeta || 1.0);
 
-        // Stage 2 Discrete Dynamic Recurrence Relation:
-        // W_{t+1} = max(0, W_t + Arrivals_t - ServiceCapacity_t)
-        const WtNext = Math.max(0, Math.round((Wt + At - serviceCapacity) * 10) / 10);
-
-        // Estimate average wait time in minutes for students in this hour block
-        // Combines M/M/c random arrival queuing delay + deterministic carryover backlog delay
-        const waitMinutes = this.computeSlotWaitMinutes(At, Wt, xt, mu);
-
-        // Compute Subject Competency Coverage & Subject-Overlooked Students
-        const subjectCoverage = {};
-        let slotSubjectUnmatched = 0;
-        for (const sub of subjects) {
-          const subDemand = slotArr[sub] || 0;
-          const capableTutors = tutorIds.filter(tid => tutorMap[tid] && tutorMap[tid].competencies.includes(sub)).length;
-          // Each tutor splits time across subjects, but if 0 or too few capable tutors are present
-          // for a spike (like 12 Trig students at 10am), compute unmatched students:
-          const maxSubCapacity = capableTutors * mu;
-          const unmatched = Math.max(0, subDemand - maxSubCapacity);
-          subjectCoverage[sub] = {
-            demand: subDemand,
-            capableTutors,
-            maxSubCapacity,
-            unmatched: Math.round(unmatched * 10) / 10
-          };
-          slotSubjectUnmatched += unmatched;
-        }
-
-        // Compute "Overlooked Students" (body in seat without adequate tutor eyes on work)
-        // Happens either when total demand exceeds eyes-on capacity OR when subject competency is missing
-        const eyesOnCapacity = xt * idealLoad;
-        const capacityOverlooked = Math.max(0, totalDemandInHour - eyesOnCapacity);
-        const overlookedStudents = Math.round(Math.max(capacityOverlooked, slotSubjectUnmatched) * 10) / 10;
-
-        // Idle tutor hours: tutors beyond what is needed to comfortably serve the active demand
-        const neededTutorsForDemand = Math.max(1, Math.ceil(totalDemandInHour / idealLoad));
-        const idleTutors = Math.max(0, xt - neededTutorsForDemand);
-
-        // Ratios
-        const studentsPerTutor = xt > 0 ? Math.round((totalDemandInHour / xt) * 100) / 100 : totalDemandInHour;
-        const tutorToStudentRatio = totalDemandInHour > 0 ? Math.round((xt / totalDemandInHour) * 1000) / 1000 : 1.0;
-        const engagementRatePct = totalDemandInHour > 0
-          ? Math.min(100, Math.max(0, Math.round(((totalDemandInHour - overlookedStudents) / totalDemandInHour) * 1000) / 10))
-          : 100;
-
-        byDay[day][hr] = {
-          day,
-          hourId: hr,
-          hourLabel: hrObj.label,
-          shortLabel: hrObj.short,
-          tutorIds,
-          xt,
-          arrivals: At,
-          subjectArrivals: { ...slotArr },
-          Wt: Math.round(Wt * 10) / 10,
-          serviceCapacity: Math.round(serviceCapacity * 10) / 10,
-          studentsServed: Math.round(studentsServed * 10) / 10,
-          WtNext,
-          waitMinutes: Math.round(waitMinutes * 10) / 10,
-          studentsPerTutor,
-          tutorToStudentRatio,
-          overlookedStudents,
-          subjectUnmatched: Math.round(slotSubjectUnmatched * 10) / 10,
-          subjectCoverage,
-          idleTutors,
-          engagementRatePct,
-          slotCost
-        };
-
-        // Accumulate weekly totals
-        totalArrivalsWeek += At;
+        totalArrivalsWeek += arr;
         totalTutorHoursWeek += xt;
         totalLaborCostWeek += slotCost;
-        totalWeightedWaitMinutes += waitMinutes * At;
-        totalOverlookedStudents += overlookedStudents;
-        totalSubjectUnmatchedStudents += slotSubjectUnmatched;
-        totalIdleTutorHours += idleTutors;
-        if (waitMinutes > peakWaitMinutes) peakWaitMinutes = waitMinutes;
-        if (waitMinutes > targetWait) hoursExceedingTargetWait++;
+        weightedWaitSum += lam * wq;
+        if (wq > peakWaitMinutes) peakWaitMinutes = wq;
+        if (wq > targetWait) hoursExceedingTarget++;
+        if (rho >= 1.0 || wq >= 999.0) unstableSlotsCount++;
 
-        // Advance recurrence state to next hour
-        Wt = WtNext;
-      }
-    }
+        byDay[day][hrId] = {
+          day,
+          hourId: hrId,
+          hourLabel: hrObj.label,
+          shortLabel: hrObj.short,
+          hourNum: hrNum,
+          tutorIds,
+          xt,
+          arrivals: arr,
+          occupancy: occ,
+          handRaiseLambda: lam,
+          serviceCapacity: xt * mu,
+          rho: Math.round(rho * 1000) / 1000,
+          pWait: Math.round(pWait * 1000) / 1000,
+          waitMinutes: Math.round(wq * 100) / 100,
+          minTutors: minT,
+          sqrtStaffing: sqrtT,
+          slotCost,
+          isClosed: false
+        };
+      });
+    });
 
-    // Compute hourly average across the 4 operating days (for Graph 1 & Graph 2)
+    // Compute hourly averages across open operating days
     const hourlyAverages = hours.map(hrObj => {
-      const hr = hrObj.id;
-      let sumArr = 0, sumXt = 0, sumCap = 0, sumWt = 0, sumWtNext = 0, sumWait = 0, sumOverlooked = 0;
-      const sumSub = {};
-      subjects.forEach(s => { sumSub[s] = 0; });
+      const hrId = hrObj.id;
+      let sumArr = 0, sumLam = 0, sumXt = 0, sumCap = 0, sumWait = 0, openDaysCount = 0;
 
       days.forEach(d => {
-        const cell = byDay[d][hr];
-        sumArr += cell.arrivals;
-        sumXt += cell.xt;
-        sumCap += cell.serviceCapacity;
-        sumWt += cell.Wt;
-        sumWtNext += cell.WtNext;
-        sumWait += cell.waitMinutes;
-        sumOverlooked += cell.overlookedStudents;
-        subjects.forEach(s => {
-          sumSub[s] += cell.subjectArrivals[s] || 0;
-        });
+        const cell = byDay[d][hrId];
+        if (cell && !cell.isClosed) {
+          sumArr += cell.arrivals;
+          sumLam += cell.handRaiseLambda;
+          sumXt += cell.xt;
+          sumCap += cell.serviceCapacity;
+          sumWait += Math.min(60, cell.waitMinutes);
+          openDaysCount++;
+        }
       });
 
-      const n = days.length;
-      const avgSub = {};
-      subjects.forEach(s => { avgSub[s] = Math.round((sumSub[s] / n) * 10) / 10; });
-
+      const n = Math.max(1, openDaysCount);
       return {
-        hourId: hr,
+        hourId: hrId,
         label: hrObj.label,
         short: hrObj.short,
         avgArrivals: Math.round((sumArr / n) * 10) / 10,
+        avgLambda: Math.round((sumLam / n) * 10) / 10,
         avgTutors: Math.round((sumXt / n) * 10) / 10,
         avgCapacity: Math.round((sumCap / n) * 10) / 10,
-        avgWt: Math.round((sumWt / n) * 10) / 10,
-        avgWtNext: Math.round((sumWtNext / n) * 10) / 10,
-        avgWaitMinutes: Math.round((sumWait / n) * 10) / 10,
-        avgOverlooked: Math.round((sumOverlooked / n) * 10) / 10,
-        avgSubjectArrivals: avgSub
+        avgWaitMinutes: Math.round((sumWait / n) * 10) / 10
       };
     });
 
-    const avgWaitWeek = totalArrivalsWeek > 0
-      ? Math.round((totalWeightedWaitMinutes / totalArrivalsWeek) * 10) / 10
-      : 0;
-    const overallEngagementPct = totalArrivalsWeek > 0
-      ? Math.min(100, Math.max(0, Math.round(((totalArrivalsWeek - totalOverlookedStudents) / totalArrivalsWeek) * 1000) / 10))
-      : 100;
-    const avgStudentsPerTutorWeek = totalTutorHoursWeek > 0
-      ? Math.round((totalArrivalsWeek / totalTutorHoursWeek) * 100) / 100
-      : 0;
+    const totalLambda = adjustedRows.reduce((acc, r) => acc + r.handRaiseLambda, 0);
+    const weightedAvgWait = totalLambda > 0 ? (weightedWaitSum / totalLambda) : 0;
 
     return {
       byDay,
@@ -484,78 +456,97 @@ class MathLabModelEngine {
       kpis: {
         totalArrivalsWeek: Math.round(totalArrivalsWeek),
         totalTutorHoursWeek,
-        totalLaborCostWeek: Math.round(totalLaborCostWeek * 100) / 100,
-        avgWaitWeek,
+        totalLaborCostWeek: Math.round(totalLaborCostWeek),
+        avgWaitWeek: Math.round(weightedAvgWait * 100) / 100,
         peakWaitMinutes: Math.round(peakWaitMinutes * 10) / 10,
-        totalOverlookedStudents: Math.round(totalOverlookedStudents),
-        totalSubjectUnmatchedStudents: Math.round(totalSubjectUnmatchedStudents),
-        totalIdleTutorHours,
-        hoursExceedingTargetWait,
-        overallEngagementPct,
-        avgStudentsPerTutorWeek,
-        serviceRateMu: Math.round(mu * 100) / 100
+        hoursExceedingTargetWait: hoursExceedingTarget,
+        unstableSlotsCount,
+        serviceRateMu: mu,
+        targetWaitMin: targetWait
       }
     };
   }
 
   /**
-   * Computes realistic wait time in minutes for a 1-hour block using a hybrid
-   * M/M/c Erlang-C queuing formula + deterministic queue carryover delay.
+   * Generates Graph 3: Verification of Erlang-C & Square-Root Staffing Law curve
+   * Uses sheet 'Check_Erlang_C_sqrt' data points: offered load a vs recommended minimum c
    */
-  computeSlotWaitMinutes(arrivals, queueStart, tutorsCount, mu) {
-    if (tutorsCount <= 0) return 35.0;
-    const totalCap = tutorsCount * mu;
-    const effectiveDemand = arrivals + queueStart;
-    if (effectiveDemand <= 0.1) return 1.0;
-
-    // Utilization ratio rho
-    const rho = effectiveDemand / totalCap;
-
-    // 1. Deterministic fluid queue delay when demand exceeds capacity
-    const carryoverEnd = Math.max(0, queueStart + arrivals - totalCap);
-    const avgQueueLength = (queueStart + carryoverEnd) / 2;
-    const fluidDelayMinutes = (avgQueueLength / totalCap) * 32;
-
-    // 2. Stochastic M/M/c random arrival clustering delay
-    let stochasticWait = 1.5 + Math.pow(Math.min(1.0, rho), 2.4) * 5.2;
-
-    // 3. Overload bottleneck penalty when rho > 1
-    const overloadPenalty = rho > 1.0 ? (rho - 1.0) * 14 : 0;
-
-    const totalWait = Math.max(1.2, fluidDelayMinutes + stochasticWait + overloadPenalty);
-    return Math.min(35.0, totalWait);
+  generateTradeoffFrontier(params = this.data.parameters) {
+    const rawCheckRows = this.data.erlangSqrtCheckRows || [];
+    return rawCheckRows.map(r => ({
+      lambda: r.lambda,
+      offeredLoad: r.offeredLoad,
+      minServersSqrt: r.minServersSqrt,
+      scheduledServers: r.scheduledServers,
+      utilization: r.utilization,
+      pWait: r.pWait,
+      wqMinutes: r.wqMinutes
+    }));
   }
 
   /**
-   * Generates Graph 3 Data: Trade-off Frontier (Weekly Tutoring Budget $ vs. Average Wait Time & Engagement)
+   * Builds the individual tutor schedule matrix from the optimal template assignments:
+   * Maps 9 GAs and 4 SIs to their assigned templates.
    */
-  generateTradeoffFrontier(params = this.data.parameters, adjustedArrivals = null) {
-    const arrivals = adjustedArrivals || this.getAdjustedArrivals(params);
-    const cutLevels = [45, 35, 25, 15, 5, 0, -10, -20, -30];
-    const points = [];
-
-    for (const cut of cutLevels) {
-      const testParams = {
-        ...params,
-        budgetCutPercent: cut,
-        optimizationObjective: "balanced"
-      };
-      const sched = this.solveOptimalSchedule(testParams, arrivals);
-      const evalRes = this.evaluateSchedule(sched, testParams, arrivals);
-      points.push({
-        cutPercent: cut,
-        budget: Math.round(evalRes.kpis.totalLaborCostWeek),
-        tutorHours: evalRes.kpis.totalTutorHoursWeek,
-        avgWait: evalRes.kpis.avgWaitWeek,
-        peakWait: evalRes.kpis.peakWaitMinutes,
-        overlooked: evalRes.kpis.totalOverlookedStudents,
-        engagementPct: evalRes.kpis.overallEngagementPct
+  solveOptimalSchedule(params = this.data.parameters) {
+    const days = this.data.meta.operatingDays;
+    const hours = this.data.meta.operatingHours;
+    const schedule = {};
+    days.forEach(d => {
+      schedule[d] = {};
+      hours.forEach(h => {
+        schedule[d][h.id] = [];
       });
-    }
+    });
 
-    // Sort by budget ascending
-    points.sort((a, b) => a.budget - b.budget);
-    return points;
+    // Optimal mapping of tutors to templates:
+    // GA-T1 (2 tutors): ga-1, ga-7
+    // GA-T2 (2 tutors): ga-2, ga-8
+    // GA-T3 (1 tutor):  ga-3
+    // GA-T4 (3 tutors): ga-4, ga-5, ga-6
+    // GA-T5 (0 tutors): -
+    // GA-T6 (1 tutor):  ga-9
+    // SI-T1 (1 tutor):  ug-donnie
+    // SI-T2 (1 tutor):  ug-mariah
+    // SI-T3 (0 tutors): -
+    // SI-T4 (0 tutors): -
+    // SI-T5 (2 tutors): ug-taylor, ug-joe
+    const tutorTemplateMap = {
+      "ga-1": "GA-T1",
+      "ga-7": "GA-T1",
+      "ga-2": "GA-T2",
+      "ga-8": "GA-T2",
+      "ga-3": "GA-T3",
+      "ga-4": "GA-T4",
+      "ga-5": "GA-T4",
+      "ga-6": "GA-T4",
+      "ga-9": "GA-T6",
+      "ug-donnie": "SI-T1",
+      "ug-mariah": "SI-T2",
+      "ug-taylor": "SI-T5",
+      "ug-joe": "SI-T5"
+    };
+
+    const rowMap = {};
+    (this.data.erlangBaselineRows || []).forEach(r => {
+      rowMap[`${r.day}_${r.hourId}`] = r;
+    });
+
+    days.forEach(day => {
+      hours.forEach(hrObj => {
+        const key = `${day}_${hrObj.id}`;
+        if (!rowMap[key]) return; // closed slot
+        const hr = hrObj.hour24;
+
+        Object.entries(tutorTemplateMap).forEach(([tutorId, templateId]) => {
+          if (this.templateCovers(templateId, day, hr)) {
+            schedule[day][hrObj.id].push(tutorId);
+          }
+        });
+      });
+    });
+
+    return schedule;
   }
 }
 

@@ -1,16 +1,9 @@
 /**
  * ============================================================================
  * MATH 319: MATHEMATICAL MODELING — DATA & CONFIGURATION FILE (data.js)
- * Project: Math Lab Staffing and Student Flow
+ * Project: Math Lab Staffing and Student Flow (Erlang-C & Shift Template Model)
  * Author:  Yusuf Osuntuyi (Fall 2026)
- * ============================================================================
- *
- * HOW TO EDIT THIS FILE LATER:
- * 1. You can edit any number, tutor name, weekly hour limit, subject, or arrival
- *    rate directly in this file and refresh your browser.
- * 2. OR you can edit everything visually inside the Dashboard's "Data & Roster
- *    Editor" tab and click "Export data.js / JSON / CSV" or upload your Excel
- *    file ("Copy of Math Lab Participation Tracker 2026-2027.xlsx").
+ * Based on: Osuntuyi_Proj1.xlsx
  * ============================================================================
  */
 
@@ -19,11 +12,12 @@ window.MATH_LAB_DEFAULT_DATA = {
     projectTitle: "Math Lab Staffing & Student Flow Optimization",
     course: "MATH 319 — Mathematical Modeling",
     author: "Yusuf Osuntuyi",
-    instructor: "Prof. Ross",
+    instructor: "Prof. Andrew Ross",
     semester: "Fall 2026",
-    dataSourceName: "Copy of Math Lab Participation Tracker 2026-2027.xlsx",
+    dataSourceName: "Osuntuyi_Proj1.xlsx (Erlang-C Queueing & Shift Template Model)",
     operatingDays: ["Monday", "Tuesday", "Wednesday", "Thursday"],
     operatingHours: [
+      { id: "08:00", label: "8:00 AM", short: "8am", hour24: 8 },
       { id: "09:00", label: "9:00 AM", short: "9am", hour24: 9 },
       { id: "10:00", label: "10:00 AM", short: "10am", hour24: 10 },
       { id: "11:00", label: "11:00 AM", short: "11am", hour24: 11 },
@@ -31,28 +25,1058 @@ window.MATH_LAB_DEFAULT_DATA = {
       { id: "13:00", label: "1:00 PM", short: "1pm", hour24: 13 },
       { id: "14:00", label: "2:00 PM", short: "2pm", hour24: 14 },
       { id: "15:00", label: "3:00 PM", short: "3pm", hour24: 15 },
-      { id: "16:00", label: "4:00 PM", short: "4pm", hour24: 16 }
+      { id: "16:00", label: "4:00 PM", short: "4pm", hour24: 16 },
+      { id: "17:00", label: "5:00 PM", short: "5pm", hour24: 17 }
     ]
   },
 
   // --------------------------------------------------------------------------
-  // 1. MODEL PARAMETERS (Default Baseline)
+  // 1. MODEL PARAMETERS (Exact Workbook Sheet 'Parameters')
   // --------------------------------------------------------------------------
   parameters: {
-    avgSessionMinutes: 18,        // 1/mu: Average active tutor time per student (15 to 25 mins -> mu = 3.33/hr)
-    targetWaitMinutes: 8,         // Target maximum average wait time (8-10 mins, Proposal Graph 2)
-    idealStudentsPerTutor: 3.2,   // Beyond this load per tutor, students risk being "overlooked"
-    maxRoomTutorCapacity: 10,     // Physical table/seating cap for tutors on duty at once
-    minTutorsPerHour: 1,          // Minimum coverage bound at all open hours
-    trafficSurgePercent: 0,       // Scenario slider: +30% for midterm/final exam weeks
-    budgetCutPercent: 0,          // Scenario slider: -15% budget cut test
-    demandSmoothingPercent: 0,    // Scenario slider: % of peak students nudged to quiet morning hours
-    gaLabAllocationRatio: 1.0,    // Portion of GA weekly hours scheduled in Mon-Thu lab grid
-    optimizationObjective: "balanced" // "balanced" | "subject_match" | "min_cost"
+    lambdaStudent: 4,             // lambda_student: Hand-raises per student per hour (Workbook B2)
+    muTutor: 20,                  // mu_tutor: Questions answered per tutor per hour (3 min/visit, Workbook B3)
+    targetWaitMin: 3,             // Target_Wait_Min: Max allowed expected wait time (Wq in minutes, Workbook B4)
+    numGAs: 9,                    // Num_GAs: Total Graduate Assistants available (Workbook B5)
+    gaWeeklyHours: 20,            // GA_Weekly_Hours: Exact weekly hours per GA (= 20 constraint, Workbook B6)
+    maxSIs: 4,                    // Max_SIs: Maximum Supplemental Instructors available (Workbook B7)
+    siMaxHours: 8,                // SI_Max_Hours: Max weekly hours per SI (<= 8 constraint, Workbook B8)
+    minOpenTutors: 1,             // Min_Open_Tutors: Minimum tutors on duty during any open lab hour (Workbook B9)
+    safetyFactorBeta: 1.0,        // Safety factor for square-root staffing law: c = ceil(a + beta * sqrt(a))
+    trafficSurgePercent: 0,       // Scenario slider: +% surge for midterms / finals
+    demandSmoothingPercent: 0,    // Scenario slider: % peak traffic shifted to morning hours
+    optimizationObjective: "erlang_c_weighted_wait"
   },
 
   // --------------------------------------------------------------------------
-  // 2. MATH SUBJECTS TRACKED IN THE LAB
+  // 2. SHIFT PATTERN TEMPLATES (Exact Workbook Sheet 'Queueing_&_Schedule' R3:R13)
+  // --------------------------------------------------------------------------
+  shiftTemplates: [
+    {
+      id: "GA-T1",
+      name: "GA-T1",
+      role: "GA",
+      weeklyHours: 20,
+      description: "M/W 8am-1pm + T/Th 8am-1pm",
+      defaultAssigned: 1,
+      optimalAssigned: 2
+    },
+    {
+      id: "GA-T2",
+      name: "GA-T2",
+      role: "GA",
+      weeklyHours: 20,
+      description: "M/W 1pm-6pm + T/Th 11am-4pm",
+      defaultAssigned: 1,
+      optimalAssigned: 2
+    },
+    {
+      id: "GA-T3",
+      name: "GA-T3",
+      role: "GA",
+      weeklyHours: 20,
+      description: "M/W 10am-4pm + T/Th 10am-2pm",
+      defaultAssigned: 0,
+      optimalAssigned: 1
+    },
+    {
+      id: "GA-T4",
+      name: "GA-T4",
+      role: "GA",
+      weeklyHours: 20,
+      description: "M/W 12pm-6pm + T/Th 12pm-4pm",
+      defaultAssigned: 0,
+      optimalAssigned: 3
+    },
+    {
+      id: "GA-T5",
+      name: "GA-T5",
+      role: "GA",
+      weeklyHours: 20,
+      description: "M/W Full Day 8am-6pm",
+      defaultAssigned: 0,
+      optimalAssigned: 0
+    },
+    {
+      id: "GA-T6",
+      name: "GA-T6",
+      role: "GA",
+      weeklyHours: 20,
+      description: "M/W 9am-3pm + T/Th 11am-3pm",
+      defaultAssigned: 0,
+      optimalAssigned: 1
+    },
+    {
+      id: "SI-T1",
+      name: "SI-T1",
+      role: "SI",
+      weeklyHours: 8,
+      description: "M/W Peak 11am-3pm",
+      defaultAssigned: 0,
+      optimalAssigned: 1
+    },
+    {
+      id: "SI-T2",
+      name: "SI-T2",
+      role: "SI",
+      weeklyHours: 8,
+      description: "T/Th Peak 11am-3pm",
+      defaultAssigned: 0,
+      optimalAssigned: 1
+    },
+    {
+      id: "SI-T3",
+      name: "SI-T3",
+      role: "SI",
+      weeklyHours: 8,
+      description: "M/W Midday 12pm-4pm",
+      defaultAssigned: 0,
+      optimalAssigned: 0
+    },
+    {
+      id: "SI-T4",
+      name: "SI-T4",
+      role: "SI",
+      weeklyHours: 8,
+      description: "T/Th Midday 12pm-4pm",
+      defaultAssigned: 0,
+      optimalAssigned: 0
+    },
+    {
+      id: "SI-T5",
+      name: "SI-T5",
+      role: "SI",
+      weeklyHours: 8,
+      description: "M/W/T/Th Lunch Surge 12pm-2pm",
+      defaultAssigned: 0,
+      optimalAssigned: 2
+    }
+  ],
+
+  initialTemplateAssignments: {
+    "GA-T1": 1,
+    "GA-T2": 1,
+    "GA-T3": 0,
+    "GA-T4": 0,
+    "GA-T5": 0,
+    "GA-T6": 0,
+    "SI-T1": 0,
+    "SI-T2": 0,
+    "SI-T3": 0,
+    "SI-T4": 0,
+    "SI-T5": 0
+  },
+
+  optimalTemplateAssignments: {
+    "GA-T1": 2,
+    "GA-T2": 2,
+    "GA-T3": 1,
+    "GA-T4": 3,
+    "GA-T5": 0,
+    "GA-T6": 1,
+    "SI-T1": 1,
+    "SI-T2": 1,
+    "SI-T3": 0,
+    "SI-T4": 0,
+    "SI-T5": 2
+  },
+
+  // --------------------------------------------------------------------------
+  // 3. EXACT 36-HOUR BASELINE DATA (From Sheet 'Queueing_&_Schedule' R17:R52)
+  // --------------------------------------------------------------------------
+  erlangBaselineRows: [
+  {
+    "rowNum": 17,
+    "day": "Monday",
+    "hour": 8,
+    "hourId": "08:00",
+    "avgArrivals": 1.4286,
+    "avgOccupancy": 0.55,
+    "handRaiseLambda": 2.2,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.11,
+    "baselinePWait": 0.11,
+    "baselineWq": 0.3708
+  },
+  {
+    "rowNum": 18,
+    "day": "Monday",
+    "hour": 9,
+    "hourId": "09:00",
+    "avgArrivals": 0.8571,
+    "avgOccupancy": 1.0952,
+    "handRaiseLambda": 4.381,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.219,
+    "baselinePWait": 0.219,
+    "baselineWq": 0.8415
+  },
+  {
+    "rowNum": 19,
+    "day": "Monday",
+    "hour": 10,
+    "hourId": "10:00",
+    "avgArrivals": 1.4286,
+    "avgOccupancy": 1.65,
+    "handRaiseLambda": 6.6,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.33,
+    "baselinePWait": 0.33,
+    "baselineWq": 1.4776
+  },
+  {
+    "rowNum": 20,
+    "day": "Monday",
+    "hour": 11,
+    "hourId": "11:00",
+    "avgArrivals": 3.4286,
+    "avgOccupancy": 2.0429,
+    "handRaiseLambda": 8.1714,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.4086,
+    "baselinePWait": 0.4086,
+    "baselineWq": 2.0725
+  },
+  {
+    "rowNum": 21,
+    "day": "Monday",
+    "hour": 12,
+    "hourId": "12:00",
+    "avgArrivals": 9.7143,
+    "avgOccupancy": 7.8762,
+    "handRaiseLambda": 31.5048,
+    "minTutors": 3,
+    "baselineScheduled": 1,
+    "baselineRho": 1.5752,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 22,
+    "day": "Monday",
+    "hour": 13,
+    "hourId": "13:00",
+    "avgArrivals": 2.5714,
+    "avgOccupancy": 8.5071,
+    "handRaiseLambda": 34.0286,
+    "minTutors": 3,
+    "baselineScheduled": 1,
+    "baselineRho": 1.7014,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 23,
+    "day": "Monday",
+    "hour": 14,
+    "hourId": "14:00",
+    "avgArrivals": 1.7143,
+    "avgOccupancy": 4.431,
+    "handRaiseLambda": 17.7238,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.8862,
+    "baselinePWait": 0.8862,
+    "baselineWq": 23.3598
+  },
+  {
+    "rowNum": 24,
+    "day": "Monday",
+    "hour": 15,
+    "hourId": "15:00",
+    "avgArrivals": 1.4286,
+    "avgOccupancy": 3.4429,
+    "handRaiseLambda": 13.7714,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.6886,
+    "baselinePWait": 0.6886,
+    "baselineWq": 6.633
+  },
+  {
+    "rowNum": 25,
+    "day": "Monday",
+    "hour": 16,
+    "hourId": "16:00",
+    "avgArrivals": 0.8571,
+    "avgOccupancy": 2.8405,
+    "handRaiseLambda": 11.3619,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.5681,
+    "baselinePWait": 0.5681,
+    "baselineWq": 3.946
+  },
+  {
+    "rowNum": 26,
+    "day": "Monday",
+    "hour": 17,
+    "hourId": "17:00",
+    "avgArrivals": 1.1429,
+    "avgOccupancy": 2.8738,
+    "handRaiseLambda": 11.4952,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.5748,
+    "baselinePWait": 0.5748,
+    "baselineWq": 4.0549
+  },
+  {
+    "rowNum": 27,
+    "day": "Tuesday",
+    "hour": 8,
+    "hourId": "08:00",
+    "avgArrivals": 0.4286,
+    "avgOccupancy": 0.119,
+    "handRaiseLambda": 0.4762,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.0238,
+    "baselinePWait": 0.0238,
+    "baselineWq": 0.0732
+  },
+  {
+    "rowNum": 28,
+    "day": "Tuesday",
+    "hour": 9,
+    "hourId": "09:00",
+    "avgArrivals": 0.1429,
+    "avgOccupancy": 0.1071,
+    "handRaiseLambda": 0.4286,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.0214,
+    "baselinePWait": 0.0214,
+    "baselineWq": 0.0657
+  },
+  {
+    "rowNum": 29,
+    "day": "Tuesday",
+    "hour": 10,
+    "hourId": "10:00",
+    "avgArrivals": 2.8571,
+    "avgOccupancy": 1.219,
+    "handRaiseLambda": 4.8762,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.2438,
+    "baselinePWait": 0.2438,
+    "baselineWq": 0.9673
+  },
+  {
+    "rowNum": 30,
+    "day": "Tuesday",
+    "hour": 11,
+    "hourId": "11:00",
+    "avgArrivals": 5.1429,
+    "avgOccupancy": 3.6333,
+    "handRaiseLambda": 14.5333,
+    "minTutors": 2,
+    "baselineScheduled": 2,
+    "baselineRho": 0.3633,
+    "baselinePWait": 0.1937,
+    "baselineWq": 0.4563
+  },
+  {
+    "rowNum": 31,
+    "day": "Tuesday",
+    "hour": 12,
+    "hourId": "12:00",
+    "avgArrivals": 12.7143,
+    "avgOccupancy": 12.081,
+    "handRaiseLambda": 48.3238,
+    "minTutors": 4,
+    "baselineScheduled": 2,
+    "baselineRho": 1.2081,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 32,
+    "day": "Tuesday",
+    "hour": 13,
+    "hourId": "13:00",
+    "avgArrivals": 2.7143,
+    "avgOccupancy": 14.1643,
+    "handRaiseLambda": 56.6571,
+    "minTutors": 4,
+    "baselineScheduled": 1,
+    "baselineRho": 2.8329,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 33,
+    "day": "Tuesday",
+    "hour": 14,
+    "hourId": "14:00",
+    "avgArrivals": 1.0,
+    "avgOccupancy": 4.7524,
+    "handRaiseLambda": 19.0095,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.9505,
+    "baselinePWait": 0.9505,
+    "baselineWq": 57.5769
+  },
+  {
+    "rowNum": 34,
+    "day": "Tuesday",
+    "hour": 15,
+    "hourId": "15:00",
+    "avgArrivals": 1.2857,
+    "avgOccupancy": 3.9762,
+    "handRaiseLambda": 15.9048,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.7952,
+    "baselinePWait": 0.7952,
+    "baselineWq": 11.6512
+  },
+  {
+    "rowNum": 35,
+    "day": "Wednesday",
+    "hour": 8,
+    "hourId": "08:00",
+    "avgArrivals": 0.4,
+    "avgOccupancy": 0.03,
+    "handRaiseLambda": 0.12,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.006,
+    "baselinePWait": 0.006,
+    "baselineWq": 0.0181
+  },
+  {
+    "rowNum": 36,
+    "day": "Wednesday",
+    "hour": 9,
+    "hourId": "09:00",
+    "avgArrivals": 0.8,
+    "avgOccupancy": 0.61,
+    "handRaiseLambda": 2.44,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.122,
+    "baselinePWait": 0.122,
+    "baselineWq": 0.4169
+  },
+  {
+    "rowNum": 37,
+    "day": "Wednesday",
+    "hour": 10,
+    "hourId": "10:00",
+    "avgArrivals": 7.6,
+    "avgOccupancy": 2.33,
+    "handRaiseLambda": 9.32,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.466,
+    "baselinePWait": 0.466,
+    "baselineWq": 2.618
+  },
+  {
+    "rowNum": 38,
+    "day": "Wednesday",
+    "hour": 11,
+    "hourId": "11:00",
+    "avgArrivals": 9.2,
+    "avgOccupancy": 5.0333,
+    "handRaiseLambda": 20.1333,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 1.0067,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 39,
+    "day": "Wednesday",
+    "hour": 12,
+    "hourId": "12:00",
+    "avgArrivals": 12.4,
+    "avgOccupancy": 9.18,
+    "handRaiseLambda": 36.72,
+    "minTutors": 3,
+    "baselineScheduled": 1,
+    "baselineRho": 1.836,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 40,
+    "day": "Wednesday",
+    "hour": 13,
+    "hourId": "13:00",
+    "avgArrivals": 3.0,
+    "avgOccupancy": 10.5033,
+    "handRaiseLambda": 42.0133,
+    "minTutors": 3,
+    "baselineScheduled": 1,
+    "baselineRho": 2.1007,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 41,
+    "day": "Wednesday",
+    "hour": 14,
+    "hourId": "14:00",
+    "avgArrivals": 3.0,
+    "avgOccupancy": 5.3133,
+    "handRaiseLambda": 21.2533,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 1.0627,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 42,
+    "day": "Wednesday",
+    "hour": 15,
+    "hourId": "15:00",
+    "avgArrivals": 1.0,
+    "avgOccupancy": 5.89,
+    "handRaiseLambda": 23.56,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 1.178,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 43,
+    "day": "Wednesday",
+    "hour": 16,
+    "hourId": "16:00",
+    "avgArrivals": 0.8,
+    "avgOccupancy": 4.2667,
+    "handRaiseLambda": 17.0667,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.8533,
+    "baselinePWait": 0.8533,
+    "baselineWq": 17.4546
+  },
+  {
+    "rowNum": 44,
+    "day": "Wednesday",
+    "hour": 17,
+    "hourId": "17:00",
+    "avgArrivals": 0.2,
+    "avgOccupancy": 1.25,
+    "handRaiseLambda": 5.0,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.25,
+    "baselinePWait": 0.25,
+    "baselineWq": 1.0
+  },
+  {
+    "rowNum": 45,
+    "day": "Thursday",
+    "hour": 8,
+    "hourId": "08:00",
+    "avgArrivals": 1.0,
+    "avgOccupancy": 0.6433,
+    "handRaiseLambda": 2.5733,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.1287,
+    "baselinePWait": 0.1287,
+    "baselineWq": 0.443
+  },
+  {
+    "rowNum": 46,
+    "day": "Thursday",
+    "hour": 9,
+    "hourId": "09:00",
+    "avgArrivals": 0.4,
+    "avgOccupancy": 0.6633,
+    "handRaiseLambda": 2.6533,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.1327,
+    "baselinePWait": 0.1327,
+    "baselineWq": 0.4589
+  },
+  {
+    "rowNum": 47,
+    "day": "Thursday",
+    "hour": 10,
+    "hourId": "10:00",
+    "avgArrivals": 4.0,
+    "avgOccupancy": 2.3267,
+    "handRaiseLambda": 9.3067,
+    "minTutors": 1,
+    "baselineScheduled": 1,
+    "baselineRho": 0.4653,
+    "baselinePWait": 0.4653,
+    "baselineWq": 2.611
+  },
+  {
+    "rowNum": 48,
+    "day": "Thursday",
+    "hour": 11,
+    "hourId": "11:00",
+    "avgArrivals": 5.6,
+    "avgOccupancy": 4.42,
+    "handRaiseLambda": 17.68,
+    "minTutors": 2,
+    "baselineScheduled": 2,
+    "baselineRho": 0.442,
+    "baselinePWait": 0.271,
+    "baselineWq": 0.7284
+  },
+  {
+    "rowNum": 49,
+    "day": "Thursday",
+    "hour": 12,
+    "hourId": "12:00",
+    "avgArrivals": 10.6,
+    "avgOccupancy": 12.8967,
+    "handRaiseLambda": 51.5867,
+    "minTutors": 4,
+    "baselineScheduled": 2,
+    "baselineRho": 1.2897,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 50,
+    "day": "Thursday",
+    "hour": 13,
+    "hourId": "13:00",
+    "avgArrivals": 4.6,
+    "avgOccupancy": 16.0,
+    "handRaiseLambda": 64.0,
+    "minTutors": 4,
+    "baselineScheduled": 1,
+    "baselineRho": 3.2,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 51,
+    "day": "Thursday",
+    "hour": 14,
+    "hourId": "14:00",
+    "avgArrivals": 0.8,
+    "avgOccupancy": 7.6833,
+    "handRaiseLambda": 30.7333,
+    "minTutors": 3,
+    "baselineScheduled": 1,
+    "baselineRho": 1.5367,
+    "baselinePWait": 1.0,
+    "baselineWq": 999.0
+  },
+  {
+    "rowNum": 52,
+    "day": "Thursday",
+    "hour": 15,
+    "hourId": "15:00",
+    "avgArrivals": 1.0,
+    "avgOccupancy": 4.85,
+    "handRaiseLambda": 19.4,
+    "minTutors": 2,
+    "baselineScheduled": 1,
+    "baselineRho": 0.97,
+    "baselinePWait": 0.97,
+    "baselineWq": 97.0
+  }
+],
+
+  // --------------------------------------------------------------------------
+  // 4. SQUARE-ROOT STAFFING LAW CHECK TABLE (Sheet 'Check_Erlang_C_sqrt')
+  // --------------------------------------------------------------------------
+  erlangSqrtCheckRows: [
+  {
+    "lambda": 20.0,
+    "offeredLoad": 1.0,
+    "minServersSqrt": 2,
+    "scheduledServers": 2,
+    "utilization": 0.5,
+    "pWait": 0.3333,
+    "wqMinutes": 1.0
+  },
+  {
+    "lambda": 40.0,
+    "offeredLoad": 2.0,
+    "minServersSqrt": 4,
+    "scheduledServers": 4,
+    "utilization": 0.5,
+    "pWait": 0.1739,
+    "wqMinutes": 0.2609
+  },
+  {
+    "lambda": 60.0,
+    "offeredLoad": 3.0,
+    "minServersSqrt": 5,
+    "scheduledServers": 5,
+    "utilization": 0.6,
+    "pWait": 0.2362,
+    "wqMinutes": 0.3542
+  },
+  {
+    "lambda": 80.0,
+    "offeredLoad": 4.0,
+    "minServersSqrt": 6,
+    "scheduledServers": 6,
+    "utilization": 0.6667,
+    "pWait": 0.2848,
+    "wqMinutes": 0.4271
+  },
+  {
+    "lambda": 100.0,
+    "offeredLoad": 5.0,
+    "minServersSqrt": 8,
+    "scheduledServers": 8,
+    "utilization": 0.625,
+    "pWait": 0.1673,
+    "wqMinutes": 0.1673
+  },
+  {
+    "lambda": 120.0,
+    "offeredLoad": 6.0,
+    "minServersSqrt": 9,
+    "scheduledServers": 9,
+    "utilization": 0.6667,
+    "pWait": 0.196,
+    "wqMinutes": 0.196
+  },
+  {
+    "lambda": 140.0,
+    "offeredLoad": 7.0,
+    "minServersSqrt": 10,
+    "scheduledServers": 10,
+    "utilization": 0.7,
+    "pWait": 0.2217,
+    "wqMinutes": 0.2217
+  },
+  {
+    "lambda": 160.0,
+    "offeredLoad": 8.0,
+    "minServersSqrt": 11,
+    "scheduledServers": 11,
+    "utilization": 0.7273,
+    "pWait": 0.245,
+    "wqMinutes": 0.245
+  },
+  {
+    "lambda": 180.0,
+    "offeredLoad": 9.0,
+    "minServersSqrt": 12,
+    "scheduledServers": 12,
+    "utilization": 0.75,
+    "pWait": 0.266,
+    "wqMinutes": 0.266
+  },
+  {
+    "lambda": 200.0,
+    "offeredLoad": 10.0,
+    "minServersSqrt": 14,
+    "scheduledServers": 14,
+    "utilization": 0.7143,
+    "pWait": 0.1741,
+    "wqMinutes": 0.1306
+  },
+  {
+    "lambda": 220.0,
+    "offeredLoad": 11.0,
+    "minServersSqrt": 15,
+    "scheduledServers": 15,
+    "utilization": 0.7333,
+    "pWait": 0.1898,
+    "wqMinutes": 0.1423
+  },
+  {
+    "lambda": 240.0,
+    "offeredLoad": 12.0,
+    "minServersSqrt": 16,
+    "scheduledServers": 16,
+    "utilization": 0.75,
+    "pWait": 0.2046,
+    "wqMinutes": 0.1534
+  },
+  {
+    "lambda": 260.0,
+    "offeredLoad": 13.0,
+    "minServersSqrt": 17,
+    "scheduledServers": 17,
+    "utilization": 0.7647,
+    "pWait": 0.2185,
+    "wqMinutes": 0.1639
+  },
+  {
+    "lambda": 280.0,
+    "offeredLoad": 14.0,
+    "minServersSqrt": 18,
+    "scheduledServers": 18,
+    "utilization": 0.7778,
+    "pWait": 0.2317,
+    "wqMinutes": 0.1738
+  },
+  {
+    "lambda": 300.0,
+    "offeredLoad": 15.0,
+    "minServersSqrt": 19,
+    "scheduledServers": 19,
+    "utilization": 0.7895,
+    "pWait": 0.2442,
+    "wqMinutes": 0.1832
+  },
+  {
+    "lambda": 320.0,
+    "offeredLoad": 16.0,
+    "minServersSqrt": 20,
+    "scheduledServers": 20,
+    "utilization": 0.8,
+    "pWait": 0.2561,
+    "wqMinutes": 0.1921
+  },
+  {
+    "lambda": 340.0,
+    "offeredLoad": 17.0,
+    "minServersSqrt": 22,
+    "scheduledServers": 22,
+    "utilization": 0.7727,
+    "pWait": 0.181,
+    "wqMinutes": 0.1086
+  },
+  {
+    "lambda": 360.0,
+    "offeredLoad": 18.0,
+    "minServersSqrt": 23,
+    "scheduledServers": 23,
+    "utilization": 0.7826,
+    "pWait": 0.1907,
+    "wqMinutes": 0.1144
+  },
+  {
+    "lambda": 380.0,
+    "offeredLoad": 19.0,
+    "minServersSqrt": 24,
+    "scheduledServers": 24,
+    "utilization": 0.7917,
+    "pWait": 0.2001,
+    "wqMinutes": 0.12
+  },
+  {
+    "lambda": 400.0,
+    "offeredLoad": 20.0,
+    "minServersSqrt": 25,
+    "scheduledServers": 25,
+    "utilization": 0.8,
+    "pWait": 0.2091,
+    "wqMinutes": 0.1255
+  },
+  {
+    "lambda": 420.0,
+    "offeredLoad": 21.0,
+    "minServersSqrt": 26,
+    "scheduledServers": 26,
+    "utilization": 0.8077,
+    "pWait": 0.2178,
+    "wqMinutes": 0.1307
+  },
+  {
+    "lambda": 440.0,
+    "offeredLoad": 22.0,
+    "minServersSqrt": 27,
+    "scheduledServers": 27,
+    "utilization": 0.8148,
+    "pWait": 0.2263,
+    "wqMinutes": 0.1358
+  },
+  {
+    "lambda": 460.0,
+    "offeredLoad": 23.0,
+    "minServersSqrt": 28,
+    "scheduledServers": 28,
+    "utilization": 0.8214,
+    "pWait": 0.2344,
+    "wqMinutes": 0.1406
+  },
+  {
+    "lambda": 480.0,
+    "offeredLoad": 24.0,
+    "minServersSqrt": 29,
+    "scheduledServers": 29,
+    "utilization": 0.8276,
+    "pWait": 0.2423,
+    "wqMinutes": 0.1454
+  },
+  {
+    "lambda": 500.0,
+    "offeredLoad": 25.0,
+    "minServersSqrt": 30,
+    "scheduledServers": 30,
+    "utilization": 0.8333,
+    "pWait": 0.2499,
+    "wqMinutes": 0.1499
+  },
+  {
+    "lambda": 520.0,
+    "offeredLoad": 26.0,
+    "minServersSqrt": 32,
+    "scheduledServers": 32,
+    "utilization": 0.8125,
+    "pWait": 0.1865,
+    "wqMinutes": 0.0933
+  },
+  {
+    "lambda": 540.0,
+    "offeredLoad": 27.0,
+    "minServersSqrt": 33,
+    "scheduledServers": 33,
+    "utilization": 0.8182,
+    "pWait": 0.1931,
+    "wqMinutes": 0.0965
+  },
+  {
+    "lambda": 560.0,
+    "offeredLoad": 28.0,
+    "minServersSqrt": 34,
+    "scheduledServers": 34,
+    "utilization": 0.8235,
+    "pWait": 0.1995,
+    "wqMinutes": 0.0998
+  },
+  {
+    "lambda": 580.0,
+    "offeredLoad": 29.0,
+    "minServersSqrt": 35,
+    "scheduledServers": 35,
+    "utilization": 0.8286,
+    "pWait": 0.2058,
+    "wqMinutes": 0.1029
+  },
+  {
+    "lambda": 600.0,
+    "offeredLoad": 30.0,
+    "minServersSqrt": 36,
+    "scheduledServers": 36,
+    "utilization": 0.8333,
+    "pWait": 0.2119,
+    "wqMinutes": 0.1059
+  },
+  {
+    "lambda": 620.0,
+    "offeredLoad": 31.0,
+    "minServersSqrt": 37,
+    "scheduledServers": 37,
+    "utilization": 0.8378,
+    "pWait": 0.2179,
+    "wqMinutes": 0.1089
+  },
+  {
+    "lambda": 640.0,
+    "offeredLoad": 32.0,
+    "minServersSqrt": 38,
+    "scheduledServers": 38,
+    "utilization": 0.8421,
+    "pWait": 0.2237,
+    "wqMinutes": 0.1118
+  },
+  {
+    "lambda": 660.0,
+    "offeredLoad": 33.0,
+    "minServersSqrt": 39,
+    "scheduledServers": 39,
+    "utilization": 0.8462,
+    "pWait": 0.2294,
+    "wqMinutes": 0.1147
+  },
+  {
+    "lambda": 680.0,
+    "offeredLoad": 34.0,
+    "minServersSqrt": 40,
+    "scheduledServers": 40,
+    "utilization": 0.85,
+    "pWait": 0.2349,
+    "wqMinutes": 0.1175
+  },
+  {
+    "lambda": 700.0,
+    "offeredLoad": 35.0,
+    "minServersSqrt": 41,
+    "scheduledServers": 41,
+    "utilization": 0.8537,
+    "pWait": 0.2404,
+    "wqMinutes": 0.1202
+  },
+  {
+    "lambda": 720.0,
+    "offeredLoad": 36.0,
+    "minServersSqrt": 42,
+    "scheduledServers": 42,
+    "utilization": 0.8571,
+    "pWait": 0.2457,
+    "wqMinutes": 0.1228
+  },
+  {
+    "lambda": 740.0,
+    "offeredLoad": 37.0,
+    "minServersSqrt": 44,
+    "scheduledServers": 44,
+    "utilization": 0.8409,
+    "pWait": 0.1909,
+    "wqMinutes": 0.0818
+  },
+  {
+    "lambda": 760.0,
+    "offeredLoad": 38.0,
+    "minServersSqrt": 45,
+    "scheduledServers": 45,
+    "utilization": 0.8444,
+    "pWait": 0.1957,
+    "wqMinutes": 0.0839
+  },
+  {
+    "lambda": 780.0,
+    "offeredLoad": 39.0,
+    "minServersSqrt": 46,
+    "scheduledServers": 46,
+    "utilization": 0.8478,
+    "pWait": 0.2003,
+    "wqMinutes": 0.0858
+  },
+  {
+    "lambda": 800.0,
+    "offeredLoad": 40.0,
+    "minServersSqrt": 47,
+    "scheduledServers": 47,
+    "utilization": 0.8511,
+    "pWait": 0.2049,
+    "wqMinutes": 0.0878
+  },
+  {
+    "lambda": 820.0,
+    "offeredLoad": 41.0,
+    "minServersSqrt": 48,
+    "scheduledServers": 48,
+    "utilization": 0.8542,
+    "pWait": 0.2094,
+    "wqMinutes": 0.0897
+  },
+  {
+    "lambda": 840.0,
+    "offeredLoad": 42.0,
+    "minServersSqrt": 49,
+    "scheduledServers": 49,
+    "utilization": 0.8571,
+    "pWait": 0.2138,
+    "wqMinutes": 0.0916
+  }
+],
+
+  // --------------------------------------------------------------------------
+  // 5. MATH SUBJECTS TRACKED IN THE LAB
   // --------------------------------------------------------------------------
   subjects: [
     { id: "alg",   name: "College Algebra", short: "Algebra", color: "#3b82f6", courseCode: "MATH 111" },
@@ -63,153 +1087,24 @@ window.MATH_LAB_DEFAULT_DATA = {
   ],
 
   // --------------------------------------------------------------------------
-  // 3. TUTOR ROSTER & CONSTRAINTS (From Math Lab Meeting Audio & Proposal)
-  //    - 6 Graduate Assistants (GAs) @ 20 hrs/week (16 hrs Mon-Thu Lab + 4 hrs Fri/Prep,
-  //      or configurable up to 20 hrs directly in the grid)
-  //    - Donnie (10 hrs/wk), Mariah (10 hrs/wk), Taylor (10 hrs/wk), Joe (8 hrs/wk)
-  //    - Additional Undergrad Student Workers @ 8 hrs/wk
+  // 6. TUTOR ROSTER (9 Graduate Assistants @ 20h + 4 Supplemental Instructors @ 8h)
   // --------------------------------------------------------------------------
   tutors: [
-    {
-      id: "ga-1",
-      name: "Grad Assistant 1 (Alex)",
-      role: "GA",
-      tierLabel: "Graduate Assistant",
-      contractHours: 20,
-      monThuLabHours: 20, // 4 days x 4 hrs/day in Mon-Thu window (20h contract w/ Friday/prep)
-      hourlyWage: 18.00,
-      competencies: ["alg", "trig", "pre", "calc", "stats"],
-      notes: "Full STEM coverage; strong in Calculus & Trigonometry"
-    },
-    {
-      id: "ga-2",
-      name: "Grad Assistant 2 (Brianna)",
-      role: "GA",
-      tierLabel: "Graduate Assistant",
-      contractHours: 20,
-      monThuLabHours: 20,
-      hourlyWage: 18.00,
-      competencies: ["alg", "pre", "calc", "stats"],
-      notes: "Specializes in Applied Stats & Precalculus"
-    },
-    {
-      id: "ga-3",
-      name: "Grad Assistant 3 (Carlos)",
-      role: "GA",
-      tierLabel: "Graduate Assistant",
-      contractHours: 20,
-      monThuLabHours: 20,
-      hourlyWage: 18.00,
-      competencies: ["alg", "trig", "pre", "calc"],
-      notes: "Strong Trigonometry & Calculus tutor"
-    },
-    {
-      id: "ga-4",
-      name: "Grad Assistant 4 (Diana)",
-      role: "GA",
-      tierLabel: "Graduate Assistant",
-      contractHours: 20,
-      monThuLabHours: 20,
-      hourlyWage: 18.00,
-      competencies: ["alg", "trig", "stats"],
-      notes: "Gateway courses & Statistics specialist"
-    },
-    {
-      id: "ga-5",
-      name: "Grad Assistant 5 (Ethan)",
-      role: "GA",
-      tierLabel: "Graduate Assistant",
-      contractHours: 20,
-      monThuLabHours: 20,
-      hourlyWage: 18.00,
-      competencies: ["alg", "pre", "calc"],
-      notes: "Algebra through Calculus sequence"
-    },
-    {
-      id: "ga-6",
-      name: "Grad Assistant 6 (Fatima)",
-      role: "GA",
-      tierLabel: "Graduate Assistant",
-      contractHours: 20,
-      monThuLabHours: 20,
-      hourlyWage: 18.00,
-      competencies: ["alg", "trig", "pre", "stats"],
-      notes: "High engagement in Trig, Precalc & Stats"
-    },
-    {
-      id: "ug-donnie",
-      name: "Donnie",
-      role: "UG_10",
-      tierLabel: "Lead Undergrad (10h)",
-      contractHours: 10,
-      monThuLabHours: 10,
-      hourlyWage: 13.50,
-      competencies: ["alg", "trig", "pre", "calc"],
-      notes: "Maxed at 10 hrs/wk; comfortable with Trig & Calc rushes"
-    },
-    {
-      id: "ug-mariah",
-      name: "Mariah",
-      role: "UG_10",
-      tierLabel: "Undergrad Tutor (10h)",
-      contractHours: 10,
-      monThuLabHours: 10,
-      hourlyWage: 13.50,
-      competencies: ["alg", "trig", "stats"],
-      notes: "Maxed at 10 hrs/wk; strong with Trig & Statistics"
-    },
-    {
-      id: "ug-taylor",
-      name: "Taylor",
-      role: "UG_10",
-      tierLabel: "Undergrad Tutor (10h)",
-      contractHours: 10,
-      monThuLabHours: 10,
-      hourlyWage: 13.50,
-      competencies: ["alg", "pre", "stats"],
-      notes: "Maxed at 10 hrs/wk; College Algebra & Precalculus focus"
-    },
-    {
-      id: "ug-joe",
-      name: "Joe",
-      role: "UG_8",
-      tierLabel: "Student Worker (8h)",
-      contractHours: 8,
-      monThuLabHours: 8,
-      hourlyWage: 12.50,
-      competencies: ["alg", "trig"],
-      notes: "Maxed at 8 hrs/wk; great for 10am Trig & Algebra support"
-    },
-    {
-      id: "ug-sam",
-      name: "Sam (Student Worker)",
-      role: "UG_8",
-      tierLabel: "Student Worker (8h)",
-      contractHours: 8,
-      monThuLabHours: 8,
-      hourlyWage: 12.50,
-      competencies: ["alg", "stats"],
-      notes: "8 hrs/wk student worker; gateway Algebra & Stats"
-    },
-    {
-      id: "ug-maya",
-      name: "Maya (Student Worker)",
-      role: "UG_8",
-      tierLabel: "Student Worker (8h)",
-      contractHours: 8,
-      monThuLabHours: 8,
-      hourlyWage: 12.50,
-      competencies: ["alg", "pre", "calc"],
-      notes: "8 hrs/wk student worker; Precalc & Calculus"
-    }
+    { id: "ga-1", name: "Grad Assistant 1 (Alex)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "trig", "pre", "calc", "stats"], notes: "Full coverage; template GA-T1" },
+    { id: "ga-2", name: "Grad Assistant 2 (Brianna)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "pre", "calc", "stats"], notes: "Specializes in Applied Stats; template GA-T2" },
+    { id: "ga-3", name: "Grad Assistant 3 (Carlos)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "trig", "pre", "calc"], notes: "Trigonometry & Calculus; template GA-T3" },
+    { id: "ga-4", name: "Grad Assistant 4 (Diana)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "trig", "stats"], notes: "Gateway courses specialist; template GA-T4" },
+    { id: "ga-5", name: "Grad Assistant 5 (Ethan)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "calc", "stats"], notes: "Calculus lead; template GA-T4" },
+    { id: "ga-6", name: "Grad Assistant 6 (Fiona)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "trig", "pre", "calc", "stats"], notes: "Senior GA; template GA-T4" },
+    { id: "ga-7", name: "Grad Assistant 7 (Gabriel)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "pre", "calc"], notes: "Precalculus & Calculus; template GA-T1" },
+    { id: "ga-8", name: "Grad Assistant 8 (Hannah)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "trig", "stats"], notes: "Trig & Stats focus; template GA-T2" },
+    { id: "ga-9", name: "Grad Assistant 9 (Ian)", role: "GA", tierLabel: "Graduate Assistant", contractHours: 20, monThuLabHours: 20, hourlyWage: 18.00, competencies: ["alg", "trig", "pre", "calc", "stats"], notes: "Full STEM coverage; template GA-T6" },
+    { id: "ug-donnie", name: "Donnie (SI Lead)", role: "SI", tierLabel: "Supplemental Instructor", contractHours: 8, monThuLabHours: 8, hourlyWage: 15.00, competencies: ["alg", "trig", "pre"], notes: "Assigned to peak template SI-T1" },
+    { id: "ug-mariah", name: "Mariah (SI Lead)", role: "SI", tierLabel: "Supplemental Instructor", contractHours: 8, monThuLabHours: 8, hourlyWage: 15.00, competencies: ["alg", "trig", "stats"], notes: "Assigned to peak template SI-T2" },
+    { id: "ug-taylor", name: "Taylor (SI Surge)", role: "SI", tierLabel: "Supplemental Instructor", contractHours: 8, monThuLabHours: 8, hourlyWage: 15.00, competencies: ["alg", "trig", "pre", "calc"], notes: "Assigned to lunch surge template SI-T5" },
+    { id: "ug-joe", name: "Joe (SI Surge)", role: "SI", tierLabel: "Supplemental Instructor", contractHours: 8, monThuLabHours: 8, hourlyWage: 15.00, competencies: ["alg", "pre", "calc"], notes: "Assigned to lunch surge template SI-T5" }
   ],
 
-  // --------------------------------------------------------------------------
-  // 4. CLASS SCHEDULE & ENROLLMENT DRIVERS (Why Students Arrive in Fluxes)
-  //    Captures the phenomenon discussed in the meeting: when specific classes
-  //    let out (e.g., 10:00 AM Trig release, 1:00 PM - 3:00 PM lectures),
-  //    waves of students walk directly into the Math Lab.
-  // --------------------------------------------------------------------------
   lecturers: [
     "Dr. Brandon Alberts",
     "Dr. Steve Blair",
@@ -327,106 +1222,399 @@ window.MATH_LAB_DEFAULT_DATA = {
   //    - 10:00 AM: Sharp Trigonometry spike (~11-12 Trig students out of ~17 total).
   //    - 1:00 PM - 4:00 PM: Severe afternoon rush (24 to 34 students/hr across subjects).
   // --------------------------------------------------------------------------
-  hourlyArrivals: {
-    Monday: {
-      "09:00": { alg: 2, trig: 1, pre: 1, calc: 0, stats: 1 }, // Total: 5  (Quiet morning)
-      "10:00": { alg: 2, trig: 11, pre: 2, calc: 1, stats: 1 }, // Total: 17 (10am Trig Class Release Spike!)
-      "11:00": { alg: 2, trig: 2, pre: 1, calc: 1, stats: 1 }, // Total: 7  (Lull before lunch)
-      "12:00": { alg: 4, trig: 2, pre: 3, calc: 2, stats: 2 }, // Total: 13 (Midday build-up)
-      "13:00": { alg: 10, trig: 2, pre: 5, calc: 3, stats: 4 }, // Total: 24 (1pm Post-Lecture Rush)
-      "14:00": { alg: 8, trig: 3, pre: 7, calc: 4, stats: 6 }, // Total: 28 (2pm Peak Lab Traffic Jam)
-      "15:00": { alg: 6, trig: 2, pre: 5, calc: 6, stats: 4 }, // Total: 23 (3pm Calc/Precalc Wave)
-      "16:00": { alg: 3, trig: 1, pre: 2, calc: 1, stats: 2 }  // Total: 9  (Late afternoon taper)
-    },
-    Tuesday: {
-      "09:00": { alg: 2, trig: 1, pre: 1, calc: 0, stats: 0 }, // Total: 4
-      "10:00": { alg: 2, trig: 10, pre: 1, calc: 1, stats: 1 }, // Total: 15 (10am Tue/Thu Trig Spike)
-      "11:00": { alg: 2, trig: 1, pre: 1, calc: 1, stats: 1 }, // Total: 6
-      "12:00": { alg: 4, trig: 1, pre: 3, calc: 2, stats: 2 }, // Total: 12
-      "13:00": { alg: 9, trig: 2, pre: 5, calc: 2, stats: 4 }, // Total: 22
-      "14:00": { alg: 8, trig: 2, pre: 6, calc: 4, stats: 5 }, // Total: 25
-      "15:00": { alg: 6, trig: 2, pre: 4, calc: 5, stats: 4 }, // Total: 21
-      "16:00": { alg: 3, trig: 1, pre: 1, calc: 1, stats: 2 }  // Total: 8
-    },
-    Wednesday: {
-      "09:00": { alg: 2, trig: 1, pre: 1, calc: 1, stats: 1 }, // Total: 6
-      "10:00": { alg: 3, trig: 11, pre: 2, calc: 1, stats: 1 }, // Total: 18 (10am Trig Rush)
-      "11:00": { alg: 3, trig: 1, pre: 2, calc: 1, stats: 1 }, // Total: 8
-      "12:00": { alg: 4, trig: 2, pre: 3, calc: 2, stats: 2 }, // Total: 13
-      "13:00": { alg: 11, trig: 2, pre: 5, calc: 3, stats: 4 }, // Total: 25
-      "14:00": { alg: 9, trig: 3, pre: 7, calc: 4, stats: 6 }, // Total: 29
-      "15:00": { alg: 6, trig: 2, pre: 5, calc: 6, stats: 5 }, // Total: 24
-      "16:00": { alg: 3, trig: 1, pre: 2, calc: 2, stats: 2 }  // Total: 10
-    },
-    Thursday: {
-      "09:00": { alg: 1, trig: 1, pre: 1, calc: 1, stats: 0 }, // Total: 4
-      "10:00": { alg: 2, trig: 10, pre: 2, calc: 1, stats: 1 }, // Total: 16 (10am Trig Rush)
-      "11:00": { alg: 2, trig: 1, pre: 1, calc: 1, stats: 1 }, // Total: 6
-      "12:00": { alg: 4, trig: 1, pre: 3, calc: 2, stats: 2 }, // Total: 12
-      "13:00": { alg: 9, trig: 2, pre: 5, calc: 3, stats: 3 }, // Total: 22
-      "14:00": { alg: 8, trig: 2, pre: 6, calc: 4, stats: 5 }, // Total: 25
-      "15:00": { alg: 6, trig: 2, pre: 4, calc: 5, stats: 4 }, // Total: 21
-      "16:00": { alg: 3, trig: 1, pre: 1, calc: 1, stats: 2 }  // Total: 8
-    }
-  },
 
   // --------------------------------------------------------------------------
-  // 6. "WHAT HAPPENED THIS SEMESTER" — CURRENT / UNOPTIMIZED SCHEDULE
-  //    Reflects the exact issue described in the audio & proposal:
-  //    - Tutors were placed mostly by convenience / static morning blocks
-  //    - 9am & 11am have 5-6 tutors sitting with only 4-8 students ("mainly tutors
-  //      and no students")
-  //    - 10am has only 2-3 tutors (and only 1 Trig-capable tutor) during the Trig rush
-  //    - 1pm-3pm peak has only 4-5 tutors for 28-35 students ("traffic jam / overlooked")
+  // 7. HOURLY STUDENT DEMAND (Arrivals & Occupancy from Workbook)
+  // --------------------------------------------------------------------------
+  hourlyArrivals: {
+    "Monday": {
+        "08:00": {
+            "avgArrivals": 1.4286,
+            "avgOccupancy": 0.55,
+            "handRaiseLambda": 2.2,
+            "minTutors": 1,
+            "_total": 2.2
+        },
+        "09:00": {
+            "avgArrivals": 0.8571,
+            "avgOccupancy": 1.0952,
+            "handRaiseLambda": 4.381,
+            "minTutors": 1,
+            "_total": 4.381
+        },
+        "10:00": {
+            "avgArrivals": 1.4286,
+            "avgOccupancy": 1.65,
+            "handRaiseLambda": 6.6,
+            "minTutors": 1,
+            "_total": 6.6
+        },
+        "11:00": {
+            "avgArrivals": 3.4286,
+            "avgOccupancy": 2.0429,
+            "handRaiseLambda": 8.1714,
+            "minTutors": 1,
+            "_total": 8.1714
+        },
+        "12:00": {
+            "avgArrivals": 9.7143,
+            "avgOccupancy": 7.8762,
+            "handRaiseLambda": 31.5048,
+            "minTutors": 3,
+            "_total": 31.5048
+        },
+        "13:00": {
+            "avgArrivals": 2.5714,
+            "avgOccupancy": 8.5071,
+            "handRaiseLambda": 34.0286,
+            "minTutors": 3,
+            "_total": 34.0286
+        },
+        "14:00": {
+            "avgArrivals": 1.7143,
+            "avgOccupancy": 4.431,
+            "handRaiseLambda": 17.7238,
+            "minTutors": 2,
+            "_total": 17.7238
+        },
+        "15:00": {
+            "avgArrivals": 1.4286,
+            "avgOccupancy": 3.4429,
+            "handRaiseLambda": 13.7714,
+            "minTutors": 2,
+            "_total": 13.7714
+        },
+        "16:00": {
+            "avgArrivals": 0.8571,
+            "avgOccupancy": 2.8405,
+            "handRaiseLambda": 11.3619,
+            "minTutors": 2,
+            "_total": 11.3619
+        },
+        "17:00": {
+            "avgArrivals": 1.1429,
+            "avgOccupancy": 2.8738,
+            "handRaiseLambda": 11.4952,
+            "minTutors": 2,
+            "_total": 11.4952
+        }
+    },
+    "Tuesday": {
+        "08:00": {
+            "avgArrivals": 0.4286,
+            "avgOccupancy": 0.119,
+            "handRaiseLambda": 0.4762,
+            "minTutors": 1,
+            "_total": 0.4762
+        },
+        "09:00": {
+            "avgArrivals": 0.1429,
+            "avgOccupancy": 0.1071,
+            "handRaiseLambda": 0.4286,
+            "minTutors": 1,
+            "_total": 0.4286
+        },
+        "10:00": {
+            "avgArrivals": 2.8571,
+            "avgOccupancy": 1.219,
+            "handRaiseLambda": 4.8762,
+            "minTutors": 1,
+            "_total": 4.8762
+        },
+        "11:00": {
+            "avgArrivals": 5.1429,
+            "avgOccupancy": 3.6333,
+            "handRaiseLambda": 14.5333,
+            "minTutors": 2,
+            "_total": 14.5333
+        },
+        "12:00": {
+            "avgArrivals": 12.7143,
+            "avgOccupancy": 12.081,
+            "handRaiseLambda": 48.3238,
+            "minTutors": 4,
+            "_total": 48.3238
+        },
+        "13:00": {
+            "avgArrivals": 2.7143,
+            "avgOccupancy": 14.1643,
+            "handRaiseLambda": 56.6571,
+            "minTutors": 4,
+            "_total": 56.6571
+        },
+        "14:00": {
+            "avgArrivals": 1.0,
+            "avgOccupancy": 4.7524,
+            "handRaiseLambda": 19.0095,
+            "minTutors": 2,
+            "_total": 19.0095
+        },
+        "15:00": {
+            "avgArrivals": 1.2857,
+            "avgOccupancy": 3.9762,
+            "handRaiseLambda": 15.9048,
+            "minTutors": 2,
+            "_total": 15.9048
+        }
+    },
+    "Wednesday": {
+        "08:00": {
+            "avgArrivals": 0.4,
+            "avgOccupancy": 0.03,
+            "handRaiseLambda": 0.12,
+            "minTutors": 1,
+            "_total": 0.12
+        },
+        "09:00": {
+            "avgArrivals": 0.8,
+            "avgOccupancy": 0.61,
+            "handRaiseLambda": 2.44,
+            "minTutors": 1,
+            "_total": 2.44
+        },
+        "10:00": {
+            "avgArrivals": 7.6,
+            "avgOccupancy": 2.33,
+            "handRaiseLambda": 9.32,
+            "minTutors": 1,
+            "_total": 9.32
+        },
+        "11:00": {
+            "avgArrivals": 9.2,
+            "avgOccupancy": 5.0333,
+            "handRaiseLambda": 20.1333,
+            "minTutors": 2,
+            "_total": 20.1333
+        },
+        "12:00": {
+            "avgArrivals": 12.4,
+            "avgOccupancy": 9.18,
+            "handRaiseLambda": 36.72,
+            "minTutors": 3,
+            "_total": 36.72
+        },
+        "13:00": {
+            "avgArrivals": 3.0,
+            "avgOccupancy": 10.5033,
+            "handRaiseLambda": 42.0133,
+            "minTutors": 3,
+            "_total": 42.0133
+        },
+        "14:00": {
+            "avgArrivals": 3.0,
+            "avgOccupancy": 5.3133,
+            "handRaiseLambda": 21.2533,
+            "minTutors": 2,
+            "_total": 21.2533
+        },
+        "15:00": {
+            "avgArrivals": 1.0,
+            "avgOccupancy": 5.89,
+            "handRaiseLambda": 23.56,
+            "minTutors": 2,
+            "_total": 23.56
+        },
+        "16:00": {
+            "avgArrivals": 0.8,
+            "avgOccupancy": 4.2667,
+            "handRaiseLambda": 17.0667,
+            "minTutors": 2,
+            "_total": 17.0667
+        },
+        "17:00": {
+            "avgArrivals": 0.2,
+            "avgOccupancy": 1.25,
+            "handRaiseLambda": 5.0,
+            "minTutors": 1,
+            "_total": 5.0
+        }
+    },
+    "Thursday": {
+        "08:00": {
+            "avgArrivals": 1.0,
+            "avgOccupancy": 0.6433,
+            "handRaiseLambda": 2.5733,
+            "minTutors": 1,
+            "_total": 2.5733
+        },
+        "09:00": {
+            "avgArrivals": 0.4,
+            "avgOccupancy": 0.6633,
+            "handRaiseLambda": 2.6533,
+            "minTutors": 1,
+            "_total": 2.6533
+        },
+        "10:00": {
+            "avgArrivals": 4.0,
+            "avgOccupancy": 2.3267,
+            "handRaiseLambda": 9.3067,
+            "minTutors": 1,
+            "_total": 9.3067
+        },
+        "11:00": {
+            "avgArrivals": 5.6,
+            "avgOccupancy": 4.42,
+            "handRaiseLambda": 17.68,
+            "minTutors": 2,
+            "_total": 17.68
+        },
+        "12:00": {
+            "avgArrivals": 10.6,
+            "avgOccupancy": 12.8967,
+            "handRaiseLambda": 51.5867,
+            "minTutors": 4,
+            "_total": 51.5867
+        },
+        "13:00": {
+            "avgArrivals": 4.6,
+            "avgOccupancy": 16.0,
+            "handRaiseLambda": 64.0,
+            "minTutors": 4,
+            "_total": 64.0
+        },
+        "14:00": {
+            "avgArrivals": 0.8,
+            "avgOccupancy": 7.6833,
+            "handRaiseLambda": 30.7333,
+            "minTutors": 3,
+            "_total": 30.7333
+        },
+        "15:00": {
+            "avgArrivals": 1.0,
+            "avgOccupancy": 4.85,
+            "handRaiseLambda": 19.4,
+            "minTutors": 2,
+            "_total": 19.4
+        }
+    }
+},
+
+  // --------------------------------------------------------------------------
+  // 8. CURRENT / INITIAL SCHEDULE TUTORS BY HOUR (Workbook Baseline)
   // --------------------------------------------------------------------------
   currentScheduleTutorsByHour: {
-    Monday: {
-      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-sam", "ug-maya"], // 7 tutors for 5 students!
-      "10:00": ["ga-2", "ga-5", "ug-taylor"],                                      // 3 tutors (0 Trig specialists!) for 17 students (11 Trig!)
-      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-joe"], // 8 tutors for 7 students!
-      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-mariah", "ug-joe"],            // 6 tutors for 13 students
-      "13:00": ["ga-4", "ga-6", "ug-mariah", "ug-sam"],                            // Only 4 tutors for 24 students!
-      "14:00": ["ga-1", "ga-4", "ug-taylor", "ug-maya"],                           // Only 4 tutors for 28 students!
-      "15:00": ["ga-3", "ga-6", "ug-donnie", "ug-sam"],                            // Only 4 tutors for 23 students!
-      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"] // 8 tutors for 9 students!
+    "Monday": {
+        "08:00": [
+            "ga-1"
+        ],
+        "09:00": [
+            "ga-1"
+        ],
+        "10:00": [
+            "ga-1"
+        ],
+        "11:00": [
+            "ga-1"
+        ],
+        "12:00": [
+            "ga-1"
+        ],
+        "13:00": [
+            "ga-2"
+        ],
+        "14:00": [
+            "ga-2"
+        ],
+        "15:00": [
+            "ga-2"
+        ],
+        "16:00": [
+            "ga-2"
+        ],
+        "17:00": [
+            "ga-2"
+        ]
     },
-    Tuesday: {
-      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-sam", "ug-maya"],
-      "10:00": ["ga-2", "ga-5", "ug-sam"],
-      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"],
-      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-joe", "ug-maya"],
-      "13:00": ["ga-2", "ga-6", "ug-taylor", "ug-sam"],
-      "14:00": ["ga-1", "ga-4", "ug-mariah", "ug-joe"],
-      "15:00": ["ga-3", "ga-6", "ug-donnie", "ug-maya"],
-      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-taylor"]
+    "Tuesday": {
+        "08:00": [
+            "ga-1"
+        ],
+        "09:00": [
+            "ga-1"
+        ],
+        "10:00": [
+            "ga-1"
+        ],
+        "11:00": [
+            "ga-1",
+            "ga-2"
+        ],
+        "12:00": [
+            "ga-1",
+            "ga-2"
+        ],
+        "13:00": [
+            "ga-2"
+        ],
+        "14:00": [
+            "ga-2"
+        ],
+        "15:00": [
+            "ga-2"
+        ]
     },
-    Wednesday: {
-      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-sam", "ug-maya"],
-      "10:00": ["ga-2", "ga-5", "ug-taylor"],
-      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-joe"],
-      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-mariah", "ug-joe"],
-      "13:00": ["ga-4", "ga-6", "ug-mariah", "ug-sam"],
-      "14:00": ["ga-1", "ga-4", "ug-taylor", "ug-maya"],
-      "15:00": ["ga-3", "ga-6", "ug-donnie", "ug-sam"],
-      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"]
+    "Wednesday": {
+        "08:00": [
+            "ga-1"
+        ],
+        "09:00": [
+            "ga-1"
+        ],
+        "10:00": [
+            "ga-1"
+        ],
+        "11:00": [
+            "ga-1"
+        ],
+        "12:00": [
+            "ga-1"
+        ],
+        "13:00": [
+            "ga-2"
+        ],
+        "14:00": [
+            "ga-2"
+        ],
+        "15:00": [
+            "ga-2"
+        ],
+        "16:00": [
+            "ga-2"
+        ],
+        "17:00": [
+            "ga-2"
+        ]
     },
-    Thursday: {
-      "09:00": ["ga-1", "ga-2", "ga-3", "ga-5", "ug-taylor", "ug-joe"],
-      "10:00": ["ga-2", "ga-5", "ug-maya"],
-      "11:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6", "ug-donnie", "ug-mariah"],
-      "12:00": ["ga-1", "ga-3", "ga-4", "ga-6", "ug-joe", "ug-maya"],
-      "13:00": ["ga-2", "ga-6", "ug-donnie", "ug-joe"],
-      "14:00": ["ga-1", "ga-4", "ug-mariah", "ug-donnie"],
-      "15:00": ["ga-3", "ga-6", "ug-mariah"],
-      "16:00": ["ga-1", "ga-2", "ga-3", "ga-4", "ga-5", "ga-6"]
+    "Thursday": {
+        "08:00": [
+            "ga-1"
+        ],
+        "09:00": [
+            "ga-1"
+        ],
+        "10:00": [
+            "ga-1"
+        ],
+        "11:00": [
+            "ga-1",
+            "ga-2"
+        ],
+        "12:00": [
+            "ga-1",
+            "ga-2"
+        ],
+        "13:00": [
+            "ga-2"
+        ],
+        "14:00": [
+            "ga-2"
+        ],
+        "15:00": [
+            "ga-2"
+        ]
     }
-  },
+},
 
-  // --------------------------------------------------------------------------
-  // 7. QR CODE CHECK-IN / CHECK-OUT LOG (Tracks Who Comes In & Session Duration)
-  //    Each record tracks student ID/name, course section, lecturer, subject,
-  //    day, hour block, check-in time, check-out time, and durationMinutes (1/mu).
-  // --------------------------------------------------------------------------
   qrConfig: {
     checkInUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in",
     checkOutUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=out",

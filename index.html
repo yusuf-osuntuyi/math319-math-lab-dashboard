@@ -84,23 +84,23 @@
 
         <div class="control-item">
           <div class="control-label">
-            <span>Session Length (1/&mu;)</span>
-            <span class="control-val" id="val-session">20 min</span>
+            <span>Tutor Service Rate (&mu;)</span>
+            <span class="control-val" id="val-session">20 / hr</span>
           </div>
-          <input type="range" id="slider-session" min="12" max="35" step="1" value="20" />
+          <input type="range" id="slider-session" min="10" max="30" step="1" value="20" />
         </div>
 
         <div class="control-item">
           <div class="control-label">
-            <span>Budget / Hour Trim</span>
-            <span class="control-val" id="val-budget-cut">0%</span>
+            <span>Safety Factor (&beta;)</span>
+            <span class="control-val" id="val-budget-cut">&beta; = 1.0</span>
           </div>
-          <input type="range" id="slider-budget-cut" min="-20" max="35" step="5" value="0" />
+          <input type="range" id="slider-budget-cut" min="0.5" max="2.5" step="0.25" value="1.0" />
         </div>
 
         <div class="control-item">
           <div class="control-label">
-            <span>Nudge Peak to Quiet Hrs</span>
+            <span>Demand Smoothing</span>
             <span class="control-val" id="val-smoothing">0%</span>
           </div>
           <input type="range" id="slider-smoothing" min="0" max="30" step="5" value="0" />
@@ -108,27 +108,25 @@
 
         <div class="control-item">
           <div class="control-label">
-            <span>Optimization Objective</span>
+            <span>Staffing Objective</span>
           </div>
           <select id="select-objective">
-            <option value="balanced">Maximize Ratio &amp; Competency Match (Full Roster)</option>
-            <option value="subject_match">Strict Subject Spike Coverage (10am Trig / 1-4pm)</option>
-            <option value="min_cost">Minimize Weekly Cost (Subject to Wait &le; 8m)</option>
+            <option value="erlang_c_weighted_wait">Min Weighted Avg Wait (Erlang-C W_q &le; 3m)</option>
+            <option value="balanced">Square-Root Staffing Law (c = a + &beta;&radic;a)</option>
+            <option value="min_cost">Min Total Labor Hours (c_t &ge; 1)</option>
           </select>
         </div>
       </div>
 
       <div class="preset-pills">
         <span style="font-size:0.73rem;color:var(--text-secondary);font-weight:600;margin-right:0.2rem;">Presets:</span>
-        <button class="preset-pill active" data-preset="baseline">Baseline Semester</button>
-        <button class="preset-pill" data-preset="midterm">+30% Midterm Rush</button>
-        <button class="preset-pill" data-preset="long_sessions">30-Min Sessions</button>
-        <button class="preset-pill" data-preset="budget_cut">-15% Budget Cut</button>
-        <button class="preset-pill" data-preset="demand_nudge">15% Quiet-Hour Nudge</button>
+        <button class="preset-pill active" data-preset="baseline">Workbook Baseline (Initial)</button>
+        <button class="preset-pill" data-preset="optimal">⚡ Optimal Full Staffing (9 GAs + 4 SIs)</button>
+        <button class="preset-pill" data-preset="midterm">+30% Exam Surge</button>
+        <button class="preset-pill" data-preset="demand_nudge">15% Morning Nudge</button>
       </div>
     </div>
   </section>
-
   <!-- MAIN CONTENT CONTAINER -->
   <main class="main-container">
 
@@ -140,21 +138,48 @@
       <!-- Dynamic Insight Callout -->
       <div class="insight-banner">
         <div class="insight-text" id="overview-insight-banner">
-          Loading model comparison...
+          Loading Erlang-C queueing model comparison...
         </div>
         <div style="display:flex;gap:0.5rem;align-items:center;">
           <label for="select-overview-day" style="font-size:0.78rem;color:var(--text-secondary);font-weight:600;">View Day:</label>
           <select id="select-overview-day" class="text-input" style="padding:0.3rem 0.6rem;">
             <option value="AVG">Weekly Average (Mon–Thu)</option>
-            <option value="Monday">Monday</option>
-            <option value="Tuesday">Tuesday</option>
-            <option value="Wednesday">Wednesday</option>
-            <option value="Thursday">Thursday</option>
+            <option value="Monday">Monday (8am–6pm)</option>
+            <option value="Tuesday">Tuesday (8am–4pm)</option>
+            <option value="Wednesday">Wednesday (8am–6pm)</option>
+            <option value="Thursday">Thursday (8am–4pm)</option>
           </select>
         </div>
       </div>
 
-      <!-- Top 5 KPI Comparison Cards -->
+      <!-- INTERACTIVE SHIFT TEMPLATE ALLOCATION STUDIO -->
+      <div class="card" style="border-color:rgba(59,130,246,0.35);margin-bottom:1.25rem;">
+        <div class="card-header" style="margin-bottom:0.75rem;">
+          <div class="card-title-group">
+            <h2>Shift Pattern Template Allocation Studio (Sheet: Queueing_&amp;_Schedule)</h2>
+            <p>Allocate the <strong>9 Graduate Assistants (20h/wk each)</strong> across templates GA-T1..GA-T6 and <strong>up to 4 SIs (8h/wk each)</strong> across SI-T1..SI-T5. Live recalculation of all 36 hours!</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="btn btn-primary" id="btn-apply-optimal-tpl" style="font-size:0.78rem;">
+              ⚡ Apply Optimal Full Staffing
+            </button>
+            <button type="button" class="btn btn-amber" id="btn-load-baseline-tpl" style="font-size:0.78rem;">
+              📋 Load Workbook Baseline
+            </button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.85rem;">
+          <span class="badge badge-blue" id="badge-total-gas" style="font-size:0.8rem;padding:0.3rem 0.65rem;">GAs Scheduled: 9 / 9</span>
+          <span class="badge badge-emerald" id="badge-total-sis" style="font-size:0.8rem;padding:0.3rem 0.65rem;">SIs Scheduled: 4 / 4</span>
+          <span class="badge badge-purple" id="badge-total-hours" style="font-size:0.8rem;padding:0.3rem 0.65rem;">Total Hours: 212 / 212 hrs</span>
+          <span class="badge badge-emerald" id="badge-target-status" style="font-size:0.8rem;padding:0.3rem 0.65rem;">Target Status: All Hours &lt; 3m</span>
+        </div>
+
+        <div id="template-allocation-inputs-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:0.75rem;"></div>
+      </div>
+
+      <!-- Top 6 KPI Comparison Cards -->
       <div class="kpi-grid" id="kpi-summary-grid"></div>
 
       <!-- Graph 1 & Graph 2 Side by Side -->
@@ -163,10 +188,10 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title-group">
-              <h2>Graph 1: Hourly Student Inflow (&lambda;<sub>t</sub>) vs. Tutoring Capacity</h2>
-              <p>Stacked arrivals by subject overlaid with Current vs. Optimized service capacity (&mu; &middot; x<sub>t</sub>)</p>
+              <h2>Graph 1: Hand-Raise Arrival Rate (&lambda;<sub>t</sub>) vs. Tutoring Capacity</h2>
+              <p>Hand-raise rate &lambda;<sub>t</sub> = 4 &times; N<sub>t</sub> overlaid with Scheduled Tutoring Capacity (c<sub>t</sub> &middot; &mu;)</p>
             </div>
-            <span class="badge badge-blue">Proposal Fig. 1</span>
+            <span class="badge badge-blue">Queue Load Fig. 1</span>
           </div>
           <div class="chart-box-tall">
             <canvas id="chart-inflow-capacity"></canvas>
@@ -177,10 +202,10 @@
         <div class="card">
           <div class="card-header">
             <div class="card-title-group">
-              <h2>Graph 2: Simulated Student Wait Time by Hour</h2>
-              <p>Current Static Staffing ("Highway Traffic Jam") vs. Optimized Dynamic Schedule &amp; 8-Min Target</p>
+              <h2>Graph 2: Erlang-C Expected Wait Time (W<sub>q</sub>) vs. 3.0-Min Target</h2>
+              <p>Baseline Staffing (&ge; 999 min overflow) vs. Shift-Template Optimized Dynamic Staffing (W<sub>q</sub> &lt; 1 sec)</p>
             </div>
-            <span class="badge badge-emerald">Proposal Fig. 2</span>
+            <span class="badge badge-emerald">Erlang-C Fig. 2</span>
           </div>
           <div class="chart-box-tall">
             <canvas id="chart-wait-time"></canvas>
@@ -188,30 +213,30 @@
         </div>
       </div>
 
-      <!-- Graph 3 & Subject Competency Breakdown -->
+      <!-- Graph 3 & Graph 4 Side by Side -->
       <div class="grid-2">
-        <!-- GRAPH 3: Trade-off Frontier (Budget vs. Wait Time) -->
+        <!-- GRAPH 3: Square-Root Staffing Law Verification Curve -->
         <div class="card">
           <div class="card-header">
             <div class="card-title-group">
-              <h2>Graph 3: Trade-Off Frontier (Weekly Budget vs. Wait Time)</h2>
-              <p>Convex Pareto curve showing diminishing returns &amp; least-disruptive hour trimming under budget cuts</p>
+              <h2>Graph 3: Square-Root Staffing Law Curve (Check_Erlang_C_sqrt)</h2>
+              <p>Offered load a = &lambda;/&mu; vs. recommended minimum servers c = &lceil;a + &beta;&radic;a&rceil; ensuring wait times &lt; 3m</p>
             </div>
-            <span class="badge badge-amber">Proposal Fig. 3</span>
+            <span class="badge badge-amber">Square-Root Law Fig. 3</span>
           </div>
           <div class="chart-box">
             <canvas id="chart-tradeoff-frontier"></canvas>
           </div>
         </div>
 
-        <!-- Subject Competency Coverage & Overlooked Students Chart -->
+        <!-- GRAPH 4: Scheduled Tutors on Duty vs. Minimum Needed for Target Wait -->
         <div class="card">
           <div class="card-header">
             <div class="card-title-group">
-              <h2>"Eyes on Work": Overlooked Students &amp; 10 AM Trig Spike</h2>
-              <p>Students without adequate tutor attention or missing subject-competent tutors by hour</p>
+              <h2>Graph 4: Tutors on Duty (c<sub>t</sub>) vs. Min Tutors for W<sub>q</sub> &lt; 3m</h2>
+              <p>Scheduled headcount c<sub>t</sub> across open lab hours compared against minimum required staffing</p>
             </div>
-            <span class="badge badge-rose">Meeting Focus</span>
+            <span class="badge badge-purple">Staffing Allocation Fig. 4</span>
           </div>
           <div class="chart-box">
             <canvas id="chart-overlooked"></canvas>
@@ -219,87 +244,108 @@
         </div>
       </div>
 
-    </section>
+    </section>    </section>
 
     <!-- ==================================================================
          TAB 2: "WHAT HAPPENED" VS. "WHAT COULD HAVE HAPPENED" SCHEDULE
          ================================================================== -->
     <section id="tab-schedule" class="tab-panel">
 
+      <!-- Shift Pattern Template Definitions Matrix -->
       <div class="card">
         <div class="card-header">
           <div class="card-title-group">
-            <h2>Side-by-Side Schedule &amp; Tutor-to-Student Ratio Comparison</h2>
-            <p>Compare what happened this semester against the ILP-optimized schedule using the exact same staff pool. <strong>Tip:</strong> Click any tutor chip in the Optimized table to manually toggle shifts!</p>
+            <h2>Shift Pattern Templates Matrix (Workbook Sheet: Queueing_&amp;_Schedule)</h2>
+            <p>11 pre-defined shift patterns satisfying Graduate Assistant (20h exact) and Supplemental Instructor (&le; 8h) constraints</p>
+          </div>
+          <span class="badge badge-blue">6 GA Templates + 5 SI Templates</span>
+        </div>
+        <div class="table-wrap" id="template-matrix-wrap"></div>
+      </div>
+
+      <!-- 36-Hour Erlang-C Schedule Performance Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title-group">
+            <h2>36-Hour Erlang-C Queue &amp; Staffing Performance Table</h2>
+            <p>Complete hour-by-hour evaluation of hand-raise arrivals &lambda;, minimum servers, scheduled tutors c, utilization &rho;, Erlang-C P(Wait), and expected wait W<sub>q</sub> (min)</p>
           </div>
           <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
-            <label style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Select Day:</label>
+            <label style="font-size:0.8rem;color:var(--text-secondary);font-weight:600;">Filter Day:</label>
             <select id="select-schedule-day" class="text-input">
-              <option value="Monday">Monday</option>
-              <option value="Tuesday">Tuesday</option>
-              <option value="Wednesday">Wednesday</option>
-              <option value="Thursday">Thursday</option>
+              <option value="ALL">All 36 Open Lab Hours</option>
+              <option value="Monday">Monday (8am–6pm)</option>
+              <option value="Tuesday">Tuesday (8am–4pm)</option>
+              <option value="Wednesday">Wednesday (8am–6pm)</option>
+              <option value="Thursday">Thursday (8am–4pm)</option>
             </select>
-            <button class="btn btn-primary" id="btn-reoptimize-schedule">
-              ⚡ Re-Run ILP Optimizer
-            </button>
           </div>
         </div>
 
         <div class="table-wrap" id="schedule-comparison-table-wrap"></div>
       </div>
 
-      <!-- Roster Utilization & Contract Compliance Table -->
+      <!-- Staff Roster Utilization & Contract Compliance Table -->
       <div class="card">
         <div class="card-header">
           <div class="card-title-group">
             <h2>Staff Roster Utilization &amp; Weekly Hour Constraints</h2>
-            <p>Verifies that 6 Graduate Assistants (GAs) and Undergrad Tutors (Donnie, Mariah, Taylor, Joe, etc.) strictly obey weekly hour limits and 1 man-hour per shift</p>
+            <p>Verifies that all 9 Graduate Assistants (Alex, Brianna, Carlos, etc. @ 20h) and 4 SIs (Donnie, Mariah, Taylor, Joe @ 8h) strictly satisfy contract hours</p>
           </div>
-          <span class="badge badge-emerald">100% Constraint Compliant</span>
+          <span class="badge badge-emerald">100% Contract Compliant (212 Hours Total)</span>
         </div>
         <div class="table-wrap" id="roster-utilization-table-wrap"></div>
       </div>
 
-    </section>
+    </section>    </section>
 
     <!-- ==================================================================
          TAB 3: 4-HOUR PROTOTYPE & MATHEMATICAL FORMULATION
          ================================================================== -->
     <section id="tab-models" class="tab-panel">
 
-      <!-- Stage 2: Interactive 4-Hour Recurrence Relation Prototype -->
+      <!-- Live Interactive Erlang-C Queue Calculator -->
       <div class="card">
         <div class="card-header">
           <div class="card-title-group">
-            <h2>Stage 2: Interactive 4-Hour Dynamic Recurrence Prototype</h2>
-            <p>Discrete queue state evolution: test how changing tutor counts x<sub>t</sub> affects student backlog accumulation W<sub>t+1</sub></p>
+            <h2>Interactive Live M/M/c Erlang-C Queue Calculator</h2>
+            <p>Experiment dynamically with student hand-raise arrival rates (&lambda;), tutor service speed (&mu;), scheduled tutors (c), and safety factor (&beta;)</p>
           </div>
-          <div style="display:flex;gap:0.6rem;align-items:center;flex-wrap:wrap;">
-            <select id="proto-day-select" class="text-input">
-              <option value="Monday">Monday</option>
-              <option value="Tuesday">Tuesday</option>
-              <option value="Wednesday">Wednesday</option>
-              <option value="Thursday">Thursday</option>
-            </select>
-            <select id="proto-window-select" class="text-input">
-              <option value="afternoon">12:00 PM – 4:00 PM (Proposal Afternoon Rush)</option>
-              <option value="morning">9:00 AM – 1:00 PM (Includes 10:00 AM Trig Spike)</option>
-            </select>
+          <span class="badge badge-blue">M/M/c Engine</span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;margin-bottom:1.2rem;background:var(--bg-subtle);padding:1rem;border-radius:10px;border:1px solid var(--border-subtle);">
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:0.35rem;">Hand-Raise Rate (&lambda; / hr):</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <input type="range" id="calc-slider-lam" min="1" max="80" step="1" value="32" style="flex:1;" />
+              <span id="calc-val-lam" style="font-family:'JetBrains Mono',monospace;font-weight:700;min-width:45px;">32.0</span>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:0.35rem;">Tutor Service Rate (&mu; / hr):</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <input type="range" id="calc-slider-mu" min="10" max="30" step="1" value="20" style="flex:1;" />
+              <span id="calc-val-mu" style="font-family:'JetBrains Mono',monospace;font-weight:700;min-width:45px;">20.0</span>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:0.35rem;">Scheduled Tutors (c):</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <input type="range" id="calc-slider-c" min="1" max="12" step="1" value="3" style="flex:1;" />
+              <span id="calc-val-c" style="font-family:'JetBrains Mono',monospace;font-weight:700;min-width:45px;">3</span>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:0.78rem;font-weight:700;color:var(--text-secondary);display:block;margin-bottom:0.35rem;">Safety Factor (&beta;):</label>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <input type="range" id="calc-slider-beta" min="0.5" max="2.5" step="0.25" value="1.0" style="flex:1;" />
+              <span id="calc-val-beta" style="font-family:'JetBrains Mono',monospace;font-weight:700;min-width:45px;">1.0</span>
+            </div>
           </div>
         </div>
 
-        <div class="math-box">
-          <div><strong>Discrete Queue Recurrence Relation (Proposal Section 2):</strong></div>
-          <div class="formula-line">
-            W<sub>t+1</sub> = max( 0,  W<sub>t</sub> + Arrivals<sub>t</sub> &minus; StudentsServed<sub>t</sub>(x<sub>t</sub>) )   where   StudentsServed<sub>t</sub>(x<sub>t</sub>) = &mu; &middot; x<sub>t</sub>
-          </div>
-          <div style="font-size:0.8rem;color:var(--text-secondary);margin-top:0.25rem;">
-            With average tutoring duration 1/&mu; = <strong id="proto-mu-label">20</strong> min, each tutor serves &mu; = <strong id="proto-rate-label">3.00</strong> students/hour. Adjust the custom tutor count x<sub>t</sub> below to experiment live:
-          </div>
-        </div>
-
-        <div class="table-wrap" id="prototype-table-wrap"></div>
+        <div id="calc-outputs-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:0.85rem;"></div>
       </div>
 
       <!-- Class Schedule Release Drivers (Full-Width Editable Card) -->
@@ -323,39 +369,50 @@
         <div class="table-wrap" id="class-schedule-summary-wrap"></div>
       </div>
 
-      <!-- Stage 3: ILP Formulation -->
+
+      <!-- Mathematical Formulation & Queueing Theory Write-Up -->
       <div class="card">
         <div class="card-header">
           <div class="card-title-group">
-            <h2>Stage 3: Integer Linear Programming (ILP) Formulation</h2>
-            <p>Complete mathematical specification connecting cost minimization &amp; engagement maximization</p>
+            <h2>Mathematical Formulation &amp; Operations Research Specifications</h2>
+            <p>Exact mathematical documentation of the M/M/c Erlang-C model, Square-Root Staffing Law, and Shift Template Integer Optimization</p>
           </div>
-          <span class="badge badge-blue">Operations Research Model</span>
+          <span class="badge badge-emerald">Project 1 Formulation</span>
         </div>
         <div class="math-box" style="margin-bottom:0;">
-          <p style="margin-bottom:0.5rem;"><strong>1. Binary Decision Variables:</strong></p>
-          <div class="formula-line">y<sub>i,d,t</sub> &in; {0, 1},   x<sub>d,t</sub> = &Sigma;<sub>i</sub> y<sub>i,d,t</sub> &in; &#8484;<sup>+</sup></div>
-          <p style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.75rem;">
-            where y<sub>i,d,t</sub> = 1 if tutor <em>i</em> is assigned on day <em>d</em> during hour block <em>t</em> (enforcing the rule that one tutor cannot cover more than 1 man-hour per shift).
+          <p style="margin-bottom:0.4rem;"><strong>1. M/M/c Erlang-C Queueing Formulation:</strong></p>
+          <div class="formula-line">
+            &lambda;<sub>t</sub> = &lambda;<sub>student</sub> &times; N<sub>t</sub> = 4 &times; N<sub>t</sub>, &nbsp;&nbsp; a<sub>t</sub> = &frac{&lambda;<sub>t</sub>}{&mu;} = &frac{&lambda;<sub>t</sub>}{20}, &nbsp;&nbsp; &rho;<sub>t</sub> = &frac{a<sub>t</sub>}{c<sub>t</sub>} = &frac{&lambda;<sub>t</sub>}{c<sub>t</sub> &middot; 20}
+          </div>
+          <div class="formula-line" style="margin-top:0.4rem;">
+            P(Wait) = C(c, a) = &frac{ rac{a^c}{c!(1 - &rho;)} }{ \sum_{k=0}^{c-1} rac{a^k}{k!} + rac{a^c}{c!(1 - &rho;)} } &nbsp; (ho &lt; 1), &nbsp;&nbsp; W<sub>q</sub> = &frac{P(Wait)}{c&mu; - &lambda;} &times; 60 	ext{ min}
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin:0.5rem 0 0.85rem;">
+            When &rho;<sub>t</sub> &ge; 1.0, arrivals exceed service capacity and the queue is unstable / overflowing (W<sub>q</sub> = 999 min). Minimum tutors for target wait is the smallest integer c &ge; 1 such that &rho; &lt; 1 and W<sub>q</sub>(c) &lt; 3.0 minutes.
           </p>
 
-          <p style="margin-bottom:0.5rem;"><strong>2. Dual Objective Functions:</strong></p>
+          <p style="margin-bottom:0.4rem;"><strong>2. Square-Root Staffing Law:</strong></p>
           <div class="formula-line">
-            (A) Maximize Engagement / Minimize Queue:  Min &Sigma;<sub>d,t</sub> [ &alpha;&middot;W<sub>d,t+1</sub> + &beta;&middot;Overlooked<sub>d,t</sub> ]<br/>
-            (B) Cost Efficiency:  Min &Sigma;<sub>i,d,t</sub> (Wage<sub>i</sub> &middot; y<sub>i,d,t</sub>)
+            c<sub>rec</sub> = &lceil; a + &beta; &radic;a &rceil; &nbsp;&nbsp; where &beta; = 1.0 (Good Service) or 2.0 (Very Good Service)
           </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin:0.5rem 0 0.85rem;">
+            Demonstrates economies of scale in queueing systems: as student traffic grows by a factor of 4, the safety buffer only needs to grow by a factor of 2 (&radic;4 = 2).
+          </p>
 
-          <p style="margin:0.75rem 0 0.5rem;"><strong>3. System Constraints:</strong></p>
-          <ul style="padding-left:1.2rem;font-size:0.82rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:0.4rem;">
-            <li><strong>Service &amp; Queue Stability:</strong> &mu; &middot; x<sub>d,t</sub> &ge; &lambda;<sub>d,t</sub> during peak blocks so wait time stays below 8–10 minutes.</li>
-            <li><strong>Staffing Tier Contracts:</strong> &Sigma;<sub>d,t</sub> y<sub>i,d,t</sub> = H<sub>i</sub> (20 hrs/wk for the 6 GAs; 10 hrs/wk for Donnie, Mariah, Taylor; 8 hrs/wk for Joe &amp; student workers).</li>
-            <li><strong>Subject Competency Coverage:</strong> &Sigma;<sub>i &in; C<sub>s</sub></sub> &mu; &middot; y<sub>i,d,t</sub> &ge; &lambda;<sub>d,t,s</sub> for each subject <em>s</em> &in; {Alg, Trig, Precalc, Calc, Stats}.</li>
-            <li><strong>Room &amp; Coverage Bounds:</strong> 1 &le; x<sub>d,t</sub> &le; C<sub>max</sub> for all operating hours (Mon–Thu, 9:00 AM – 5:00 PM).</li>
-          </ul>
+          <p style="margin-bottom:0.4rem;"><strong>3. Shift Template Integer Programming Model:</strong></p>
+          <div class="formula-line">
+            c<sub>t</sub> = &Sigma;<sub>p</sub> x<sub>p</sub> &middot; covers(p, t), &nbsp;&nbsp; &Sigma;<sub>p &in; GA</sub> x<sub>p</sub> = 9, &nbsp;&nbsp; &Sigma;<sub>p &in; SI</sub> x<sub>p</sub> &le; 4, &nbsp;&nbsp; c<sub>t</sub> &ge; 1
+          </div>
+          <div class="formula-line" style="margin-top:0.4rem;">
+            	ext{Minimize Weighted Avg Wait} = &frac{ \sum_{t=1}^{36} &lambda;<sub>t</sub> &middot; W<sub>q,t</sub> }{ \sum_{t=1}^{36} &lambda;<sub>t</sub> }
+          </div>
+          <p style="font-size:0.82rem;color:var(--text-secondary);margin-top:0.5rem;">
+            <strong>Why weight by &lambda;<sub>t</sub>?</strong> Weighting by requests-for-help (&lambda;<sub>t</sub>) ensures that the average wait time reported reflects the actual experience of students seeking assistance, rather than weighting quiet morning hours equally with high-demand midday rushes.
+          </p>
         </div>
       </div>
 
-    </section>
+    </section>    </section>
 
     <!-- ==================================================================
          TAB 4: DATA, ROSTER & EXCEL IMPORT/EXPORT STUDIO

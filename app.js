@@ -1,19 +1,21 @@
 /**
  * ============================================================================
  * MATH 319: MATHEMATICAL MODELING — INTERACTIVE APPLICATION CONTROLLER (app.js)
- * Connects data.js, optimizer.js, Chart.js visualizations, and the Live Data Studio
+ * Connects data.js, optimizer.js (Erlang-C & Shift Templates), Chart.js visualizations,
+ * and the Live Student Profile / QR Check-in System.
+ * Based on: Osuntuyi_Proj1.xlsx
  * ============================================================================
  */
 
 (function () {
-  const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
+  const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V2_ERLANG";
 
   // Deep clone utility
   function clone(obj) {
     return JSON.parse(JSON.stringify(obj));
   }
 
-  // Ensure classSchedule and lecturers have all required editable fields
+  // Ensure all data structures are properly populated and backward-compatible
   function normalizeAppData(data) {
     const def = window.MATH_LAB_DEFAULT_DATA;
     const legacyProfMap = {
@@ -26,6 +28,26 @@
     };
     const mapProfName = (name) => legacyProfMap[name] || name;
 
+    if (!data.parameters) data.parameters = clone(def.parameters);
+    if (!data.parameters.lambdaStudent) data.parameters.lambdaStudent = 4;
+    if (!data.parameters.muTutor) data.parameters.muTutor = 20;
+    if (!data.parameters.targetWaitMin) data.parameters.targetWaitMin = 3;
+    if (!data.parameters.safetyFactorBeta) data.parameters.safetyFactorBeta = 1.0;
+
+    if (!data.templateAssignments || typeof data.templateAssignments !== "object") {
+      data.templateAssignments = clone(def.optimalTemplateAssignments || def.initialTemplateAssignments);
+    }
+
+    if (!Array.isArray(data.shiftTemplates) || data.shiftTemplates.length === 0) {
+      data.shiftTemplates = clone(def.shiftTemplates || []);
+    }
+    if (!Array.isArray(data.erlangBaselineRows) || data.erlangBaselineRows.length === 0) {
+      data.erlangBaselineRows = clone(def.erlangBaselineRows || []);
+    }
+    if (!Array.isArray(data.erlangSqrtCheckRows) || data.erlangSqrtCheckRows.length === 0) {
+      data.erlangSqrtCheckRows = clone(def.erlangSqrtCheckRows || []);
+    }
+
     if (!Array.isArray(data.lecturers) || data.lecturers.length === 0) {
       data.lecturers = clone(def.lecturers || []);
     } else {
@@ -36,6 +58,7 @@
         }
       });
     }
+
     if (!Array.isArray(data.classSchedule)) {
       data.classSchedule = clone(def.classSchedule);
     }
@@ -58,6 +81,7 @@
         c.walkIns = Math.round(((c.enrolled || 0) * (c.expectedLabCapturePct || 10)) / 100);
       }
     });
+
     if (!data.qrConfig || typeof data.qrConfig !== "object") {
       data.qrConfig = clone(def.qrConfig || {
         checkInUrl: "https://yusuf-osuntuyi.github.io/math319-math-lab-dashboard/checkin.html?mode=in",
@@ -89,13 +113,18 @@
       if (!p.avatarId) p.avatarId = (defProf && defProf.avatarId) || (avatarList[idx % Math.max(1, avatarList.length)] ? avatarList[idx % avatarList.length].id : "pixel-wizard");
       if (p.lecturer) p.lecturer = mapProfName(p.lecturer);
     });
-    // Clean any legacy "(#90214)" ID suffixes from attendanceLog student names so they match studentProfiles
+
     data.attendanceLog.forEach(r => {
       if (typeof r.studentName === "string") {
         r.studentName = r.studentName.replace(/\s*\(#\d+\)\s*$/, "").trim();
       }
       if (r.lecturer) r.lecturer = mapProfName(r.lecturer);
     });
+
+    if (!Array.isArray(data.tutors) || data.tutors.length === 0) {
+      data.tutors = clone(def.tutors || []);
+    }
+
     return data;
   }
 
@@ -105,7 +134,7 @@
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed && parsed.tutors && parsed.hourlyArrivals) {
+        if (parsed && parsed.tutors && parsed.parameters) {
           return normalizeAppData(parsed);
         }
       }
@@ -117,12 +146,11 @@
 
   let appData = loadInitialState();
   let engine = new MathLabModelEngine(appData);
+  let templateEval = null;
+  let baselineEval = null;
   let optimizedSchedule = null;
   let currentEval = null;
   let optimizedEval = null;
-
-  // Custom prototype tutor counts for Tab 3 interactive recurrence sandbox
-  let customPrototypeXt = {};
 
   // Chart.js instances
   let chartInflow = null;
@@ -149,15 +177,15 @@
     el._timer = setTimeout(() => el.classList.remove("show"), 2600);
   }
 
-  // Recompute optimization and evaluations
+  // Recompute Erlang-C evaluations and shift schedules
   function recomputeModels(reoptimize = true) {
     engine = new MathLabModelEngine(appData);
-    const adjArrivals = engine.getAdjustedArrivals(appData.parameters);
-    if (reoptimize || !optimizedSchedule) {
-      optimizedSchedule = engine.solveOptimalSchedule(appData.parameters, adjArrivals);
-    }
-    currentEval = engine.evaluateSchedule(appData.currentScheduleTutorsByHour, appData.parameters, adjArrivals);
-    optimizedEval = engine.evaluateSchedule(optimizedSchedule, appData.parameters, adjArrivals);
+    templateEval = engine.evaluateTemplateAssignments(appData.templateAssignments, appData.parameters);
+    baselineEval = engine.evaluateTemplateAssignments(window.MATH_LAB_DEFAULT_DATA.initialTemplateAssignments, appData.parameters);
+
+    optimizedSchedule = engine.solveOptimalSchedule(appData.parameters);
+    currentEval = engine.evaluateSchedule(appData.currentScheduleTutorsByHour, appData.parameters);
+    optimizedEval = engine.evaluateSchedule(optimizedSchedule, appData.parameters);
   }
 
   // ==========================================================================
@@ -180,698 +208,863 @@
   }
 
   // ==========================================================================
-  // TAB 1: OVERVIEW KPI CARDS & 4 CHARTS
+  // TAB 1: EXECUTIVE OVERVIEW, SHIFT ALLOCATOR & ERLANG-C CHARTS
   // ==========================================================================
   function renderOverviewTab() {
-    const cur = currentEval.kpis;
-    const opt = optimizedEval.kpis;
+    const kpi = templateEval.kpis;
+    const baseKpi = baselineEval.kpis;
 
-    // Update dynamic insight banner
-    const waitReductionPct = cur.avgWaitWeek > 0
-      ? Math.round(((cur.avgWaitWeek - opt.avgWaitWeek) / cur.avgWaitWeek) * 100)
-      : 0;
-    const overlookedSaved = Math.max(0, cur.totalOverlookedStudents - opt.totalOverlookedStudents);
-
+    // 1. Dynamic insight banner
     const bannerEl = document.getElementById("overview-insight-banner");
-    bannerEl.innerHTML = `
-      <strong>Key Modeling Finding:</strong> Using the <em>exact same ${appData.tutors.length} staff members</em> (6 GAs + ${appData.tutors.length - 6} Undergrad Tutors), reallocating idle morning/4pm shifts to the <strong>10:00 AM Trigonometry rush</strong> and <strong>1:00–4:00 PM peak</strong> cuts average student wait time by <strong>${waitReductionPct}%</strong> (${cur.avgWaitWeek}m &rarr; ${opt.avgWaitWeek}m), prevents <strong>${overlookedSaved} students/week</strong> from being overlooked, and raises active tutor-to-student engagement from <strong>${cur.overallEngagementPct}% to ${opt.overallEngagementPct}%</strong>.
-    `;
+    if (bannerEl) {
+      const isTargetMet = kpi.meetsTargetAllHours;
+      bannerEl.innerHTML = `
+        <strong>M/M/c Erlang-C Modeling Insight:</strong> Under baseline staffing (GA-T1: 1, GA-T2: 1), peak demand at 12:00–1:00 PM creates severe server saturation (&rho; &gt; 1.5), causing queues to overflow to <strong>${baseKpi.maxWait} minutes</strong> (weighted avg: <strong>${baseKpi.weightedAvgWait} min</strong>). Under the Shift Template formulation using all <strong>9 GAs (20h each)</strong> and <strong>4 SIs (8h each)</strong>, maximum wait drops to <strong>${kpi.maxWait} min</strong> and weighted wait to <strong>${kpi.weightedAvgWait} min</strong> (${isTargetMet ? '✅ Target &lt; 3.0 min met across all 36 open lab hours!' : '⚠️ ' + kpi.slotsExceedingTarget + ' hours exceed target'}).
+      `;
+    }
 
-    // Render 5 KPI Comparison Cards
+    // 2. Render Shift Template Allocator Studio Cards
+    const allocGrid = document.getElementById("template-allocation-inputs-grid");
+    if (allocGrid) {
+      const templates = appData.shiftTemplates || [];
+      allocGrid.innerHTML = templates.map(tpl => {
+        const count = Number(appData.templateAssignments[tpl.id]) || 0;
+        const isGA = tpl.role === "GA";
+        return `
+          <div style="background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:8px;padding:0.75rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
+              <strong style="color:var(--text-primary);font-size:0.85rem;">${tpl.name}</strong>
+              <span class="badge ${isGA ? 'badge-blue' : 'badge-emerald'}" style="font-size:0.72rem;">
+                ${tpl.role} (${tpl.weeklyHours}h/wk)
+              </span>
+            </div>
+            <div style="font-size:0.75rem;color:var(--text-secondary);min-height:32px;margin-bottom:0.5rem;">
+              ${tpl.description}
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-card);border:1px solid var(--border-color);border-radius:6px;padding:0.25rem 0.5rem;">
+              <span style="font-size:0.75rem;font-weight:600;color:var(--text-secondary);">Tutors Assigned:</span>
+              <div style="display:flex;align-items:center;gap:0.35rem;">
+                <button type="button" class="btn-tpl-minus" data-id="${tpl.id}" style="background:none;border:none;color:var(--text-primary);cursor:pointer;font-weight:800;font-size:0.9rem;padding:0 0.35rem;line-height:1;">&minus;</button>
+                <input type="number" class="num-input tpl-input" data-id="${tpl.id}" min="0" max="9" value="${count}" style="width:45px;text-align:center;padding:0.2rem 0.3rem;font-size:0.82rem;font-weight:700;" />
+                <button type="button" class="btn-tpl-plus" data-id="${tpl.id}" style="background:none;border:none;color:var(--text-primary);cursor:pointer;font-weight:800;font-size:0.9rem;padding:0 0.35rem;line-height:1;">+</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Bind increment/decrement and direct inputs
+      allocGrid.querySelectorAll(".btn-tpl-minus").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.getAttribute("data-id");
+          const cur = Number(appData.templateAssignments[id]) || 0;
+          if (cur > 0) {
+            appData.templateAssignments[id] = cur - 1;
+            saveState();
+            renderAll(false);
+          }
+        });
+      });
+
+      allocGrid.querySelectorAll(".btn-tpl-plus").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const id = e.currentTarget.getAttribute("data-id");
+          const cur = Number(appData.templateAssignments[id]) || 0;
+          appData.templateAssignments[id] = cur + 1;
+          saveState();
+          renderAll(false);
+        });
+      });
+
+      allocGrid.querySelectorAll(".tpl-input").forEach(inp => {
+        inp.addEventListener("change", (e) => {
+          const id = e.currentTarget.getAttribute("data-id");
+          const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+          appData.templateAssignments[id] = val;
+          saveState();
+          renderAll(false);
+        });
+      });
+    }
+
+    // 3. Update Allocator Status Badges
+    const badgeGAs = document.getElementById("badge-total-gas");
+    if (badgeGAs) {
+      badgeGAs.textContent = `GAs Scheduled: ${kpi.totalGAs} / 9`;
+      badgeGAs.className = `badge ${kpi.totalGAs === 9 ? 'badge-blue' : 'badge-amber'}`;
+    }
+    const badgeSIs = document.getElementById("badge-total-sis");
+    if (badgeSIs) {
+      badgeSIs.textContent = `SIs Scheduled: ${kpi.totalSIs} / 4`;
+      badgeSIs.className = `badge ${kpi.totalSIs <= 4 ? 'badge-emerald' : 'badge-rose'}`;
+    }
+    const badgeHours = document.getElementById("badge-total-hours");
+    if (badgeHours) {
+      badgeHours.textContent = `Total Hours: ${kpi.totalWeeklyHours} / 212 hrs`;
+      badgeHours.className = `badge ${kpi.totalWeeklyHours === 212 ? 'badge-purple' : 'badge-amber'}`;
+    }
+    const badgeStatus = document.getElementById("badge-target-status");
+    if (badgeStatus) {
+      badgeStatus.textContent = kpi.meetsTargetAllHours ? "✅ Target Met: All 36 Hours < 3.0m" : `⚠️ Exceeds Target in ${kpi.slotsExceedingTarget} Hours`;
+      badgeStatus.className = `badge ${kpi.meetsTargetAllHours ? 'badge-emerald' : 'badge-rose'}`;
+    }
+
+    // Bind Quick Action Buttons
+    const btnOpt = document.getElementById("btn-apply-optimal-tpl");
+    if (btnOpt && !btnOpt._bound) {
+      btnOpt._bound = true;
+      btnOpt.addEventListener("click", () => {
+        appData.templateAssignments = clone(window.MATH_LAB_DEFAULT_DATA.optimalTemplateAssignments);
+        saveState("Applied Optimal Full Staffing (9 GAs + 4 SIs)");
+        renderAll(false);
+      });
+    }
+
+    const btnBase = document.getElementById("btn-load-baseline-tpl");
+    if (btnBase && !btnBase._bound) {
+      btnBase._bound = true;
+      btnBase.addEventListener("click", () => {
+        appData.templateAssignments = clone(window.MATH_LAB_DEFAULT_DATA.initialTemplateAssignments);
+        saveState("Loaded Workbook Baseline Schedule (GA-T1: 1, GA-T2: 1)");
+        renderAll(false);
+      });
+    }
+
+    // 4. Render Top 6 KPI Comparison Cards
     const kpiGrid = document.getElementById("kpi-summary-grid");
-    kpiGrid.innerHTML = `
-      <!-- KPI 1: Engagement / Eyes on Work -->
-      <div class="kpi-card emerald">
-        <div class="kpi-header">
-          <span>"Eyes on Work" Engagement</span>
-          <span>🎯 Goal #1</span>
+    if (kpiGrid) {
+      kpiGrid.innerHTML = `
+        <!-- KPI 1: Target Wait Bound -->
+        <div class="kpi-card emerald">
+          <div class="kpi-header">
+            <span>Target Max Wait (W_q)</span>
+            <span>🎯 Workbook B4</span>
+          </div>
+          <div class="kpi-comparison">
+            <span class="kpi-main-val">&le; ${kpi.targetWaitMin} min</span>
+            <span class="kpi-old-val">c &ge; minTutors</span>
+          </div>
+          <div class="kpi-delta good">
+            ${kpi.meetsTargetAllHours ? '✅ 100% Satisfied' : '⚠️ ' + kpi.slotsExceedingTarget + ' hrs exceed'}
+          </div>
+          <div class="kpi-footnote">
+            Max allowed expected wait time in queue
+          </div>
         </div>
-        <div class="kpi-comparison">
-          <span class="kpi-main-val">${opt.overallEngagementPct}%</span>
-          <span class="kpi-old-val">was ${cur.overallEngagementPct}%</span>
-        </div>
-        <div class="kpi-delta good">
-          +${(opt.overallEngagementPct - cur.overallEngagementPct).toFixed(1)}% Active Tutor Coverage
-        </div>
-        <div class="kpi-footnote">
-          Students receiving direct, subject-matched tutor attention
-        </div>
-      </div>
 
-      <!-- KPI 2: Average Student Wait Time -->
-      <div class="kpi-card">
-        <div class="kpi-header">
-          <span>Avg Student Wait Time</span>
-          <span>⏱️ Target &le; ${appData.parameters.targetWaitMinutes}m</span>
+        <!-- KPI 2: Max Wait Time -->
+        <div class="kpi-card ${kpi.maxWait <= kpi.targetWaitMin ? 'emerald' : 'rose'}">
+          <div class="kpi-header">
+            <span>Peak Wait Time</span>
+            <span>⏱️ Erlang-C W_q</span>
+          </div>
+          <div class="kpi-comparison">
+            <span class="kpi-main-val">${kpi.maxWait} min</span>
+            <span class="kpi-old-val">was ${baseKpi.maxWait} min</span>
+          </div>
+          <div class="kpi-delta ${kpi.maxWait <= kpi.targetWaitMin ? 'good' : 'warn'}">
+            ${kpi.maxWait < baseKpi.maxWait ? '&minus;' + (baseKpi.maxWait - kpi.maxWait).toFixed(1) + ' min reduction' : 'Unbalanced peak'}
+          </div>
+          <div class="kpi-footnote">
+            Longest expected wait at any peak hour
+          </div>
         </div>
-        <div class="kpi-comparison">
-          <span class="kpi-main-val">${opt.avgWaitWeek} min</span>
-          <span class="kpi-old-val">was ${cur.avgWaitWeek} min</span>
-        </div>
-        <div class="kpi-delta ${opt.avgWaitWeek <= appData.parameters.targetWaitMinutes ? 'good' : 'warn'}">
-          &minus;${(cur.avgWaitWeek - opt.avgWaitWeek).toFixed(1)} min (Peak: ${opt.peakWaitMinutes}m vs ${cur.peakWaitMinutes}m)
-        </div>
-        <div class="kpi-footnote">
-          Flattens the 1–4 PM "highway traffic jam" bottleneck
-        </div>
-      </div>
 
-      <!-- KPI 3: Overlooked Students Prevented -->
-      <div class="kpi-card rose">
-        <div class="kpi-header">
-          <span>Overlooked Students / Wk</span>
-          <span>👀 Capacity + Subject</span>
+        <!-- KPI 3: Weighted Average Wait Time -->
+        <div class="kpi-card ${kpi.weightedAvgWait <= 1.0 ? 'emerald' : 'amber'}">
+          <div class="kpi-header">
+            <span>Weighted Avg Wait</span>
+            <span>&Sigma;&lambda;W / &Sigma;&lambda;</span>
+          </div>
+          <div class="kpi-comparison">
+            <span class="kpi-main-val">${kpi.weightedAvgWait} min</span>
+            <span class="kpi-old-val">was ${baseKpi.weightedAvgWait} min</span>
+          </div>
+          <div class="kpi-delta good">
+            Weighted by student requests-for-help (&lambda;)
+          </div>
+          <div class="kpi-footnote">
+            Workbook row 58: SUMPRODUCT(&lambda;, Wq) / SUM(&lambda;)
+          </div>
         </div>
-        <div class="kpi-comparison">
-          <span class="kpi-main-val">${opt.totalOverlookedStudents}</span>
-          <span class="kpi-old-val">was ${cur.totalOverlookedStudents}</span>
-        </div>
-        <div class="kpi-delta good">
-          ${overlookedSaved} Fewer Students Overlooked
-        </div>
-        <div class="kpi-footnote">
-          Includes 10:00 AM Trig rush &amp; afternoon lecture releases
-        </div>
-      </div>
 
-      <!-- KPI 4: Idle Tutor Hours Reallocated -->
-      <div class="kpi-card amber">
-        <div class="kpi-header">
-          <span>Idle Overstaffed Hours</span>
-          <span>🔄 Shift Reallocation</span>
+        <!-- KPI 4: Graduate Assistants Scheduled -->
+        <div class="kpi-card blue">
+          <div class="kpi-header">
+            <span>Graduate Assistants</span>
+            <span>Constraint = 9</span>
+          </div>
+          <div class="kpi-comparison">
+            <span class="kpi-main-val">${kpi.totalGAs} / 9 GAs</span>
+            <span class="kpi-old-val">${kpi.totalGAs * 20} hrs/wk</span>
+          </div>
+          <div class="kpi-delta ${kpi.totalGAs === 9 ? 'good' : 'warn'}">
+            ${kpi.totalGAs === 9 ? '✅ Exactly 9 GAs Scheduled' : (kpi.totalGAs < 9 ? '⚠️ ' + (9 - kpi.totalGAs) + ' GAs Unallocated' : '⚠️ Exceeds 9 GAs')}
+          </div>
+          <div class="kpi-footnote">
+            Exact 20 hrs/week contract per GA
+          </div>
         </div>
-        <div class="kpi-comparison">
-          <span class="kpi-main-val">${opt.totalIdleTutorHours} hrs</span>
-          <span class="kpi-old-val">was ${cur.totalIdleTutorHours} hrs</span>
-        </div>
-        <div class="kpi-delta good">
-          ${Math.max(0, cur.totalIdleTutorHours - opt.totalIdleTutorHours)} Idle Hours Moved to Peak
-        </div>
-        <div class="kpi-footnote">
-          Eliminates "mainly tutors &amp; no students" at 9am/11am/4pm
-        </div>
-      </div>
 
-      <!-- KPI 5: Weekly Tutor Hours & Payroll -->
-      <div class="kpi-card purple">
-        <div class="kpi-header">
-          <span>Weekly Lab Staffing &amp; Cost</span>
-          <span>💰 Budget Limit</span>
+        <!-- KPI 5: Supplemental Instructors Scheduled -->
+        <div class="kpi-card purple">
+          <div class="kpi-header">
+            <span>Supplemental Instructors</span>
+            <span>Constraint &le; 4</span>
+          </div>
+          <div class="kpi-comparison">
+            <span class="kpi-main-val">${kpi.totalSIs} / 4 SIs</span>
+            <span class="kpi-old-val">${kpi.totalSIs * 8} hrs/wk</span>
+          </div>
+          <div class="kpi-delta ${kpi.totalSIs <= 4 ? 'good' : 'warn'}">
+            ${kpi.totalSIs <= 4 ? '✅ Within SI Budget Cap' : '⚠️ Exceeds Max 4 SIs'}
+          </div>
+          <div class="kpi-footnote">
+            Up to 8 hrs/week contract per SI
+          </div>
         </div>
-        <div class="kpi-comparison">
-          <span class="kpi-main-val">$${opt.totalLaborCostWeek.toLocaleString()}</span>
-          <span class="kpi-old-val">${opt.totalTutorHoursWeek} hrs</span>
+
+        <!-- KPI 6: Tutor Service Rate (mu) -->
+        <div class="kpi-card">
+          <div class="kpi-header">
+            <span>Tutoring Speed (&mu;)</span>
+            <span>⚡ 3 min / visit</span>
+          </div>
+          <div class="kpi-comparison">
+            <span class="kpi-main-val">${appData.parameters.muTutor || 20} / hr</span>
+            <span class="kpi-old-val">1/&mu; = 3 min</span>
+          </div>
+          <div class="kpi-delta good">
+            Offered Load a = &lambda; / ${appData.parameters.muTutor || 20}
+          </div>
+          <div class="kpi-footnote">
+            Workbook row 3: Questions answered per tutor/hr
+          </div>
         </div>
-        <div class="kpi-delta good">
-          Service Rate &mu; = ${opt.serviceRateMu}/hr (${appData.parameters.avgSessionMinutes}m/session)
-        </div>
-        <div class="kpi-footnote">
-          Total Mon–Thu Demand: ${opt.totalArrivalsWeek} student check-ins
-        </div>
-      </div>
-    `;
+      `;
+    }
 
     renderOverviewCharts();
   }
 
-  function getSelectedDaySeries(evalObj, dayKey) {
-    if (dayKey === "AVG") {
-      return evalObj.hourlyAverages;
-    }
-    const dayMap = evalObj.byDay[dayKey];
-    return appData.meta.operatingHours.map(h => {
-      const cell = dayMap[h.id];
-      return {
-        hourId: h.id,
-        label: h.label,
-        short: h.short,
-        avgArrivals: cell.arrivals,
-        avgTutors: cell.xt,
-        avgCapacity: cell.serviceCapacity,
-        avgWt: cell.Wt,
-        avgWtNext: cell.WtNext,
-        avgWaitMinutes: cell.waitMinutes,
-        avgOverlooked: cell.overlookedStudents,
-        avgSubjectArrivals: cell.subjectArrivals
-      };
-    });
-  }
-
+  // ==========================================================================
+  // RENDER 4 OVERVIEW CHARTS (ERLANG-C & SQUARE-ROOT STAFFING)
+  // ==========================================================================
   function renderOverviewCharts() {
-    const dayKey = document.getElementById("select-overview-day").value || "AVG";
-    const curSeries = getSelectedDaySeries(currentEval, dayKey);
-    const optSeries = getSelectedDaySeries(optimizedEval, dayKey);
-    const labels = curSeries.map(d => d.label);
+    const dayKey = (document.getElementById("select-overview-day")?.value) || "AVG";
+    const baseRows = baselineEval.evaluatedRows;
+    const activeRows = templateEval.evaluatedRows;
+    const mu = engine.getServiceRateMu(appData.parameters);
 
     const isLight = document.body.classList.contains("light-theme");
     const textColor = isLight ? "#334155" : "#cbd5e1";
     const gridColor = isLight ? "rgba(148, 163, 184, 0.25)" : "rgba(51, 65, 85, 0.55)";
 
-    // ------------------------------------------------------------------------
-    // GRAPH 1: Hourly Student Inflow (Stacked by Subject) vs. Tutoring Capacity
-    // ------------------------------------------------------------------------
-    const ctx1 = document.getElementById("chart-inflow-capacity").getContext("2d");
-    if (chartInflow) chartInflow.destroy();
+    let chartLabels = [];
+    let seriesLambda = [];
+    let seriesCapacityActive = [];
+    let seriesCapacityBase = [];
+    let seriesWaitActive = [];
+    let seriesWaitBase = [];
+    let seriesTutorsActive = [];
+    let seriesTutorsMin = [];
 
-    const subjectDatasets = appData.subjects.map(sub => ({
-      type: "bar",
-      label: sub.short,
-      data: optSeries.map(d => d.avgSubjectArrivals[sub.id] || 0),
-      backgroundColor: sub.color + "cc",
-      borderColor: sub.color,
-      borderWidth: 1,
-      stack: "arrivals",
-      order: 3
-    }));
+    if (dayKey === "AVG") {
+      const hourMap = {};
+      appData.meta.operatingHours.forEach(h => {
+        hourMap[h.hour24] = {
+          label: h.label,
+          sumLam: 0,
+          sumCapActive: 0,
+          sumCapBase: 0,
+          sumWaitActive: 0,
+          sumWaitBase: 0,
+          sumTutorsActive: 0,
+          sumTutorsMin: 0,
+          count: 0
+        };
+      });
 
-    chartInflow = new Chart(ctx1, {
-      data: {
-        labels,
-        datasets: [
-          {
-            type: "line",
-            label: "Optimized Service Capacity (μ · x_t)",
-            data: optSeries.map(d => d.avgCapacity),
-            borderColor: "#10b981",
-            backgroundColor: "rgba(16, 185, 129, 0.15)",
-            borderWidth: 3,
-            pointRadius: 4,
-            pointBackgroundColor: "#10b981",
-            tension: 0.25,
-            order: 1
-          },
-          {
-            type: "line",
-            label: "Current Static Capacity (What Happened)",
-            data: curSeries.map(d => d.avgCapacity),
-            borderColor: "#f43f5e",
-            borderDash: [6, 4],
-            borderWidth: 2.5,
-            pointRadius: 3.5,
-            pointBackgroundColor: "#f43f5e",
-            tension: 0.25,
-            order: 2
-          },
-          ...subjectDatasets
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              footer: (items) => {
-                const idx = items[0].dataIndex;
-                return `Total Arrivals: ${optSeries[idx].avgArrivals} students | Opt Tutors: ${optSeries[idx].avgTutors} (was ${curSeries[idx].avgTutors})`;
+      activeRows.forEach((r, idx) => {
+        const b = baseRows[idx];
+        const hObj = hourMap[r.hour];
+        if (hObj) {
+          hObj.sumLam += r.handRaiseLambda;
+          hObj.sumCapActive += r.scheduledTutors * mu;
+          hObj.sumCapBase += b ? b.scheduledTutors * mu : 0;
+          hObj.sumWaitActive += Math.min(60, r.wqMinutes);
+          hObj.sumWaitBase += b ? Math.min(60, b.wqMinutes) : 0;
+          hObj.sumTutorsActive += r.scheduledTutors;
+          hObj.sumTutorsMin += r.minTutorsCalculated;
+          hObj.count++;
+        }
+      });
+
+      appData.meta.operatingHours.forEach(h => {
+        const hObj = hourMap[h.hour24];
+        if (hObj && hObj.count > 0) {
+          chartLabels.push(hObj.label);
+          seriesLambda.push(Math.round((hObj.sumLam / hObj.count) * 10) / 10);
+          seriesCapacityActive.push(Math.round((hObj.sumCapActive / hObj.count) * 10) / 10);
+          seriesCapacityBase.push(Math.round((hObj.sumCapBase / hObj.count) * 10) / 10);
+          seriesWaitActive.push(Math.round((hObj.sumWaitActive / hObj.count) * 100) / 100);
+          seriesWaitBase.push(Math.round((hObj.sumWaitBase / hObj.count) * 100) / 100);
+          seriesTutorsActive.push(Math.round((hObj.sumTutorsActive / hObj.count) * 10) / 10);
+          seriesTutorsMin.push(Math.round((hObj.sumTutorsMin / hObj.count) * 10) / 10);
+        }
+      });
+    } else {
+      const filteredActive = activeRows.filter(r => r.day === dayKey);
+      const filteredBase = baseRows.filter(r => r.day === dayKey);
+
+      filteredActive.forEach((r, idx) => {
+        const b = filteredBase[idx];
+        chartLabels.push(`${r.hour}:00`);
+        seriesLambda.push(r.handRaiseLambda);
+        seriesCapacityActive.push(r.scheduledTutors * mu);
+        seriesCapacityBase.push(b ? b.scheduledTutors * mu : 0);
+        seriesWaitActive.push(Math.min(60, r.wqMinutes));
+        seriesWaitBase.push(b ? Math.min(60, b.wqMinutes) : 0);
+        seriesTutorsActive.push(r.scheduledTutors);
+        seriesTutorsMin.push(r.minTutorsCalculated);
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // GRAPH 1: Hand-Raise Arrival Rate vs. Tutoring Capacity
+    // ------------------------------------------------------------------------
+    const ctx1 = document.getElementById("chart-inflow-capacity")?.getContext("2d");
+    if (ctx1) {
+      if (chartInflow) chartInflow.destroy();
+      chartInflow = new Chart(ctx1, {
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              type: "bar",
+              label: "Hand-Raise Rate (λ = 4 × N)",
+              data: seriesLambda,
+              backgroundColor: "rgba(59, 130, 246, 0.65)",
+              borderColor: "#3b82f6",
+              borderWidth: 1.5,
+              order: 3
+            },
+            {
+              type: "line",
+              label: "Scheduled Tutoring Capacity (c_t · μ)",
+              data: seriesCapacityActive,
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.15)",
+              borderWidth: 3,
+              pointRadius: 4,
+              pointBackgroundColor: "#10b981",
+              tension: 0.25,
+              order: 1
+            },
+            {
+              type: "line",
+              label: "Baseline Capacity (What Happened: GA-T1 & GA-T2 only)",
+              data: seriesCapacityBase,
+              borderColor: "#f43f5e",
+              borderDash: [6, 4],
+              borderWidth: 2.5,
+              pointRadius: 3.5,
+              pointBackgroundColor: "#f43f5e",
+              tension: 0.25,
+              order: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                footer: (items) => {
+                  const idx = items[0].dataIndex;
+                  return `Hand-Raises: ${seriesLambda[idx]}/hr | Active Cap: ${seriesCapacityActive[idx]}/hr | Baseline Cap: ${seriesCapacityBase[idx]}/hr`;
+                }
               }
             }
-          }
-        },
-        scales: {
-          x: { stacked: true, ticks: { color: textColor }, grid: { color: gridColor } },
-          y: {
-            stacked: true,
-            beginAtZero: true,
-            title: { display: true, text: "Students / Hour (Arrivals vs. Service Capacity)", color: textColor },
-            ticks: { color: textColor },
-            grid: { color: gridColor }
-          }
-        }
-      }
-    });
-
-    // ------------------------------------------------------------------------
-    // GRAPH 2: Simulated Student Wait Time by Hour
-    // ------------------------------------------------------------------------
-    const ctx2 = document.getElementById("chart-wait-time").getContext("2d");
-    if (chartWait) chartWait.destroy();
-
-    const targetLine = Array(labels.length).fill(Number(appData.parameters.targetWaitMinutes) || 8);
-
-    chartWait = new Chart(ctx2, {
-      type: "line",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Current Schedule Wait Time (Severe Peak Bottleneck)",
-            data: curSeries.map(d => d.avgWaitMinutes),
-            borderColor: "#f43f5e",
-            backgroundColor: "rgba(244, 63, 94, 0.14)",
-            fill: true,
-            borderWidth: 3,
-            pointRadius: 4.5,
-            tension: 0.3
           },
-          {
-            label: "Optimized Dynamic Staffing Wait Time",
-            data: optSeries.map(d => d.avgWaitMinutes),
-            borderColor: "#10b981",
-            backgroundColor: "rgba(16, 185, 129, 0.16)",
-            fill: true,
-            borderWidth: 3,
-            pointRadius: 4.5,
-            tension: 0.3
-          },
-          {
-            label: `${appData.parameters.targetWaitMinutes}-Minute Target Threshold`,
-            data: targetLine,
-            borderColor: "#f59e0b",
-            borderDash: [5, 5],
-            borderWidth: 2,
-            pointRadius: 0,
-            fill: false
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11 } } }
-        },
-        scales: {
-          x: { ticks: { color: textColor }, grid: { color: gridColor } },
-          y: {
-            beginAtZero: true,
-            title: { display: true, text: "Estimated Student Wait Time (Minutes)", color: textColor },
-            ticks: { color: textColor },
-            grid: { color: gridColor }
-          }
-        }
-      }
-    });
-
-    // ------------------------------------------------------------------------
-    // GRAPH 3: Trade-off Frontier (Budget vs. Average Wait Time)
-    // ------------------------------------------------------------------------
-    const frontierPoints = engine.generateTradeoffFrontier(appData.parameters);
-    const ctx3 = document.getElementById("chart-tradeoff-frontier").getContext("2d");
-    if (chartFrontier) chartFrontier.destroy();
-
-    chartFrontier = new Chart(ctx3, {
-      type: "line",
-      data: {
-        labels: frontierPoints.map(p => `$${p.budget}`),
-        datasets: [
-          {
-            label: "Lab-Wide Avg Wait Time (min)",
-            data: frontierPoints.map(p => p.avgWait),
-            borderColor: "#3b82f6",
-            backgroundColor: "rgba(59, 130, 246, 0.18)",
-            fill: true,
-            borderWidth: 3,
-            pointRadius: 5,
-            pointBackgroundColor: frontierPoints.map(p =>
-              p.cutPercent === Number(appData.parameters.budgetCutPercent) ? "#f59e0b" : "#3b82f6"
-            ),
-            tension: 0.3,
-            yAxisID: "y"
-          },
-          {
-            label: "Active Engagement Rate (%)",
-            data: frontierPoints.map(p => p.engagementPct),
-            borderColor: "#10b981",
-            borderDash: [4, 4],
-            borderWidth: 2.5,
-            pointRadius: 4,
-            tension: 0.3,
-            yAxisID: "y1"
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11 } } },
-          tooltip: {
-            callbacks: {
-              afterBody: (items) => {
-                const p = frontierPoints[items[0].dataIndex];
-                return `Staff Hours: ${p.tutorHours} hrs/wk | Overlooked: ${p.overlooked} students`;
-              }
+          scales: {
+            x: { ticks: { color: textColor }, grid: { color: gridColor } },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: "Questions & Capacity per Hour", color: textColor },
+              ticks: { color: textColor },
+              grid: { color: gridColor }
             }
           }
-        },
-        scales: {
-          x: {
-            title: { display: true, text: "Weekly Tutoring Payroll Budget ($)", color: textColor },
-            ticks: { color: textColor },
-            grid: { color: gridColor }
-          },
-          y: {
-            type: "linear",
-            position: "left",
-            beginAtZero: true,
-            title: { display: true, text: "Avg Wait Time (min)", color: textColor },
-            ticks: { color: textColor },
-            grid: { color: gridColor }
-          },
-          y1: {
-            type: "linear",
-            position: "right",
-            min: 40,
-            max: 100,
-            title: { display: true, text: "Engagement Rate (%)", color: textColor },
-            ticks: { color: textColor },
-            grid: { drawOnChartArea: false }
-          }
         }
-      }
-    });
+      });
+    }
 
     // ------------------------------------------------------------------------
-    // GRAPH 4: Overlooked Students by Hour (Current vs. Optimized)
+    // GRAPH 2: Erlang-C Expected Wait Time (W_q) vs. 3-Minute Target Line
     // ------------------------------------------------------------------------
-    const ctx4 = document.getElementById("chart-overlooked").getContext("2d");
-    if (chartOverlooked) chartOverlooked.destroy();
+    const ctx2 = document.getElementById("chart-wait-time")?.getContext("2d");
+    if (ctx2) {
+      if (chartWait) chartWait.destroy();
+      const targetLine = Array(chartLabels.length).fill(Number(appData.parameters.targetWaitMin) || 3.0);
 
-    chartOverlooked = new Chart(ctx4, {
-      type: "bar",
-      data: {
-        labels,
-        datasets: [
-          {
-            label: "Current Schedule: Overlooked Students (Capacity / Subject Gap)",
-            data: curSeries.map(d => d.avgOverlooked),
-            backgroundColor: "rgba(244, 63, 94, 0.78)",
-            borderColor: "#f43f5e",
-            borderWidth: 1,
-            borderRadius: 5
-          },
-          {
-            label: "Optimized Schedule: Overlooked Students",
-            data: optSeries.map(d => d.avgOverlooked),
-            backgroundColor: "rgba(16, 185, 129, 0.82)",
-            borderColor: "#10b981",
-            borderWidth: 1,
-            borderRadius: 5
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: {
-          legend: { labels: { color: textColor, font: { size: 11 } } }
+      chartWait = new Chart(ctx2, {
+        type: "line",
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: "Scheduled Staffing Wait Time (W_q in min)",
+              data: seriesWaitActive,
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.2)",
+              fill: true,
+              borderWidth: 3,
+              pointRadius: 4.5,
+              pointBackgroundColor: "#10b981",
+              tension: 0.25
+            },
+            {
+              label: "Baseline Wait Time (Severe ≥ 999m Peak Overflow)",
+              data: seriesWaitBase,
+              borderColor: "#f43f5e",
+              borderDash: [5, 4],
+              borderWidth: 2.5,
+              pointRadius: 3.5,
+              pointBackgroundColor: "#f43f5e",
+              tension: 0.25
+            },
+            {
+              label: "Target Wait Bound (3.0 Min Max Target)",
+              data: targetLine,
+              borderColor: "#f59e0b",
+              borderDash: [4, 4],
+              borderWidth: 2,
+              pointRadius: 0
+            }
+          ]
         },
-        scales: {
-          x: { ticks: { color: textColor }, grid: { color: gridColor } },
-          y: {
-            beginAtZero: true,
-            title: { display: true, text: "Students Overlooked / Unmatched per Hour", color: textColor },
-            ticks: { color: textColor },
-            grid: { color: gridColor }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  let val = ctx.parsed.y;
+                  if (ctx.dataset.label.includes("Baseline") && val >= 60) {
+                    return `${ctx.dataset.label}: 999 min (Queue Overflow / Saturated)`;
+                  }
+                  return `${ctx.dataset.label}: ${val} min`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: textColor }, grid: { color: gridColor } },
+            y: {
+              beginAtZero: true,
+              max: Math.max(10, Math.min(65, Math.max(...seriesWaitBase) + 5)),
+              title: { display: true, text: "Expected Wait Time W_q (Minutes)", color: textColor },
+              ticks: { color: textColor },
+              grid: { color: gridColor }
+            }
           }
         }
-      }
-    });
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // GRAPH 3: Square-Root Staffing Law Verification Curve (Check_Erlang_C_sqrt)
+    // ------------------------------------------------------------------------
+    const ctx3 = document.getElementById("chart-tradeoff-frontier")?.getContext("2d");
+    if (ctx3) {
+      if (chartFrontier) chartFrontier.destroy();
+      const sqrtCheckRows = appData.erlangSqrtCheckRows || [];
+      const sampled = sqrtCheckRows.filter((_, idx) => idx % 2 === 0);
+
+      chartFrontier = new Chart(ctx3, {
+        type: "line",
+        data: {
+          labels: sampled.map(r => `a=${r.offeredLoad}`),
+          datasets: [
+            {
+              label: "Recommended Minimum Servers (c = ceil(a + β√a))",
+              data: sampled.map(r => r.minServersSqrt),
+              borderColor: "#f59e0b",
+              backgroundColor: "rgba(245, 158, 11, 0.2)",
+              borderWidth: 3,
+              pointRadius: 3,
+              tension: 0.15,
+              yAxisID: "yServers"
+            },
+            {
+              label: "Erlang-C Expected Wait W_q (min, all < 1m)",
+              data: sampled.map(r => r.wqMinutes),
+              borderColor: "#10b981",
+              borderDash: [5, 4],
+              borderWidth: 2,
+              pointRadius: 2.5,
+              tension: 0.2,
+              yAxisID: "yWait"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, font: { size: 10 } } },
+            tooltip: {
+              callbacks: {
+                footer: (items) => {
+                  const idx = items[0].dataIndex;
+                  const item = sampled[idx];
+                  return `λ=${item.lambda}/hr | Utilization: ${(item.utilization * 100).toFixed(1)}% | P(Wait): ${(item.pWait * 100).toFixed(1)}%`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: textColor, maxTicksLimit: 12 }, grid: { color: gridColor } },
+            yServers: {
+              type: "linear",
+              position: "left",
+              beginAtZero: true,
+              title: { display: true, text: "Recommended Servers (c)", color: textColor },
+              ticks: { color: textColor },
+              grid: { color: gridColor }
+            },
+            yWait: {
+              type: "linear",
+              position: "right",
+              beginAtZero: true,
+              max: 2.0,
+              title: { display: true, text: "Wait W_q (min)", color: "#10b981" },
+              ticks: { color: "#10b981" },
+              grid: { drawOnChartArea: false }
+            }
+          }
+        }
+      });
+    }
+
+    // ------------------------------------------------------------------------
+    // GRAPH 4: Scheduled Tutors on Duty vs. Minimum Tutors for W_q < 3m
+    // ------------------------------------------------------------------------
+    const ctx4 = document.getElementById("chart-overlooked")?.getContext("2d");
+    if (ctx4) {
+      if (chartOverlooked) chartOverlooked.destroy();
+      chartOverlooked = new Chart(ctx4, {
+        type: "bar",
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: "Scheduled Tutors on Duty (c_t)",
+              data: seriesTutorsActive,
+              backgroundColor: "rgba(16, 185, 129, 0.65)",
+              borderColor: "#10b981",
+              borderWidth: 1.5,
+              order: 2
+            },
+            {
+              type: "line",
+              label: "Min Tutors for W_q < 3.0 min (Workbook Col F)",
+              data: seriesTutorsMin,
+              borderColor: "#8b5cf6",
+              borderWidth: 2.5,
+              pointRadius: 4,
+              pointBackgroundColor: "#8b5cf6",
+              tension: 0.15,
+              order: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { labels: { color: textColor, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                footer: (items) => {
+                  const idx = items[0].dataIndex;
+                  return `Scheduled: ${seriesTutorsActive[idx]} tutors | Min Required: ${seriesTutorsMin[idx]} tutors`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: { ticks: { color: textColor }, grid: { color: gridColor } },
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: "Tutors Headcount on Duty", color: textColor },
+              ticks: { color: textColor, stepSize: 1 },
+              grid: { color: gridColor }
+            }
+          }
+        }
+      });
+    }
   }
 
   // ==========================================================================
-  // TAB 2: "WHAT HAPPENED" VS. "WHAT COULD HAVE HAPPENED" SCHEDULE EXPLORER
+  // TAB 2: SHIFT TEMPLATES MATRIX & 36-HOUR ERLANG-C TABLE
   // ==========================================================================
   function renderScheduleTab() {
-    const selectedDay = document.getElementById("select-schedule-day").value || "Monday";
-    const curDay = currentEval.byDay[selectedDay];
-    const optDay = optimizedEval.byDay[selectedDay];
-    const tutorMap = {};
-    appData.tutors.forEach(t => { tutorMap[t.id] = t; });
-    const subMap = {};
-    appData.subjects.forEach(s => { subMap[s.id] = s; });
+    const selectedDay = document.getElementById("select-schedule-day")?.value || "ALL";
+    const activeRows = templateEval.evaluatedRows;
+    const baseRows = baselineEval.evaluatedRows;
+    const filteredRows = selectedDay === "ALL" ? activeRows : activeRows.filter(r => r.day === selectedDay);
 
-    let rowsHtml = "";
-    for (const hrObj of appData.meta.operatingHours) {
-      const hr = hrObj.id;
-      const c = curDay[hr];
-      const o = optDay[hr];
-
-      // Build Subject Demand badges for this hour
-      const subBadges = appData.subjects
-        .filter(s => (o.subjectArrivals[s.id] || 0) > 0)
-        .map(s => `<span class="subject-pill" style="background:${s.color}" title="${s.name}">${s.short}: ${o.subjectArrivals[s.id]}</span>`)
-        .join("");
-
-      // Current Tutors List
-      const curChips = c.tutorIds.map(tid => {
-        const t = tutorMap[tid];
-        if (!t) return "";
-        const shortName = t.name.replace("Grad Assistant ", "GA ");
-        return `<span class="tutor-chip ${t.role === 'GA' ? 'ga' : 'ug'}" title="${t.name} (${t.competencies.join(', ')})">${shortName}</span>`;
+    // 1. Render Shift Pattern Template Matrix
+    const tplMatrixWrap = document.getElementById("template-matrix-wrap");
+    if (tplMatrixWrap) {
+      const templates = appData.shiftTemplates || [];
+      const tplRowsHtml = templates.map(tpl => {
+        const assigned = Number(appData.templateAssignments[tpl.id]) || 0;
+        const isGA = tpl.role === "GA";
+        return `
+          <tr>
+            <td><strong style="color:var(--text-primary);">${tpl.id}</strong></td>
+            <td><strong>${tpl.description}</strong></td>
+            <td><span class="badge ${isGA ? 'badge-blue' : 'badge-emerald'}">${tpl.role}</span></td>
+            <td style="font-family:'JetBrains Mono',monospace;">${tpl.weeklyHours} hrs</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-primary);font-size:0.95rem;">${assigned}</td>
+            <td style="font-size:0.78rem;color:var(--text-secondary);">
+              ${tpl.weeklyHours === 20 ? (tpl.id === 'GA-T5' ? 'Mon & Wed 8:00 AM – 6:00 PM (10h × 2 days)' : 'Mon–Thu open schedule coverage') : 'Midday peak support window'}
+            </td>
+          </tr>
+        `;
       }).join("");
 
-      // Optimized Interactive Tutors List (click any tutor to toggle in/out of this hour!)
-      const optChips = appData.tutors.map(t => {
-        const isAssigned = o.tutorIds.includes(t.id);
-        const shortName = t.name.replace("Grad Assistant ", "GA ").replace(" (Student Worker)", "");
-        return `<span class="tutor-chip ${t.role === 'GA' ? 'ga' : 'ug'} ${isAssigned ? 'assigned' : ''}"
-                      data-toggle-tutor="${t.id}" data-day="${selectedDay}" data-hr="${hr}"
-                      title="Click to ${isAssigned ? 'remove' : 'assign'} ${t.name} | Subjects: ${t.competencies.map(k => subMap[k]?.short).join(', ')}">
-                  ${isAssigned ? '✓ ' : '+ '}${shortName}
-                </span>`;
-      }).join("");
-
-      // Status classes
-      const curStatusClass = c.overlookedStudents > 3
-        ? "status-critical"
-        : (c.idleTutors >= 2 ? "status-idle" : "status-warning");
-      const curStatusLabel = c.overlookedStudents > 3
-        ? `⚠️ ${c.overlookedStudents} Overlooked (${c.waitMinutes}m wait)`
-        : (c.idleTutors >= 2 ? `💤 ${c.idleTutors} Idle Tutors` : `Wait: ${c.waitMinutes}m`);
-
-      const optStatusClass = o.overlookedStudents <= 1 && o.waitMinutes <= appData.parameters.targetWaitMinutes
-        ? "status-optimal"
-        : (o.overlookedStudents <= 3 ? "status-warning" : "status-critical");
-      const optStatusLabel = o.overlookedStudents <= 1
-        ? `✅ Optimal (${o.waitMinutes}m wait)`
-        : `⚡ ${o.overlookedStudents} Overlooked (${o.waitMinutes}m wait)`;
-
-      rowsHtml += `
-        <tr>
-          <td>
-            <div style="font-weight:700;color:var(--text-primary);">${hrObj.label}</div>
-            <div style="font-size:0.74rem;color:var(--text-secondary);margin-top:0.15rem;">
-              <strong>${o.arrivals}</strong> arrivals ${hr === '10:00' ? '🔥 <em>(Trig Release)</em>' : ''}
-            </div>
-            <div style="margin-top:0.3rem;">${subBadges}</div>
-          </td>
-          <td>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
-              <span><strong>${c.xt} Tutors</strong> (1 : ${c.studentsPerTutor} stu)</span>
-              <span class="status-cell ${curStatusClass}">${curStatusLabel}</span>
-            </div>
-            <div class="tutor-chip-list">${curChips}</div>
-          </td>
-          <td>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.35rem;">
-              <span><strong>${o.xt} Tutors</strong> (1 : ${o.studentsPerTutor} stu)</span>
-              <span class="status-cell ${optStatusClass}">${optStatusLabel}</span>
-            </div>
-            <div class="tutor-chip-list">${optChips}</div>
-          </td>
-        </tr>
+      tplMatrixWrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Template ID</th>
+              <th>Shift Pattern Description</th>
+              <th>Staffing Tier</th>
+              <th>Weekly Hours</th>
+              <th>Tutors Assigned</th>
+              <th>Coverage Window</th>
+            </tr>
+          </thead>
+          <tbody>${tplRowsHtml}</tbody>
+        </table>
       `;
     }
 
-    document.getElementById("schedule-comparison-table-wrap").innerHTML = `
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th style="width:20%;">Hour Block &amp; Subject Demand</th>
-            <th style="width:36%;">What Happened This Semester (Current Static)</th>
-            <th style="width:44%;">What Could Have Happened (ILP Optimized — Click Chips to Edit)</th>
-          </tr>
-        </thead>
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    `;
+    // 2. Render 36-Hour Erlang-C Schedule Performance Table
+    const schedTableWrap = document.getElementById("schedule-comparison-table-wrap");
+    if (schedTableWrap) {
+      const rowsHtml = filteredRows.map(r => {
+        const base = baseRows.find(b => b.day === r.day && b.hour === r.hour) || {};
+        const isUnstable = r.isUnstable;
+        const exceedsTarget = r.exceedsTarget;
 
-    // Bind click events to toggle tutor chips in the optimized schedule
-    document.querySelectorAll("[data-toggle-tutor]").forEach(chip => {
-      chip.addEventListener("click", () => {
-        const tid = chip.getAttribute("data-toggle-tutor");
-        const day = chip.getAttribute("data-day");
-        const hr = chip.getAttribute("data-hr");
-        const list = optimizedSchedule[day][hr];
-        const idx = list.indexOf(tid);
-        if (idx >= 0) {
-          if (list.length <= 1) {
-            showToast("Minimum coverage bound requires at least 1 tutor on duty!");
-            return;
-          }
-          list.splice(idx, 1);
-        } else {
-          list.push(tid);
+        let statusBadge = `<span class="badge badge-emerald">✅ Optimal (${r.wqMinutes}m)</span>`;
+        if (isUnstable) {
+          statusBadge = `<span class="badge badge-rose">⚠️ Saturated (ρ ≥ 1)</span>`;
+        } else if (exceedsTarget) {
+          statusBadge = `<span class="badge badge-amber">⚠️ Exceeds 3m (${r.wqMinutes}m)</span>`;
         }
-        renderAll(false);
-        showToast(`Updated ${day} ${hr} shift assignment`);
-      });
-    });
 
-    // Render Roster Utilization Summary Table
-    let rosterRows = "";
-    const curTutorMap = {};
-    currentEval.tutorSummary.forEach(t => { curTutorMap[t.id] = t; });
-
-    optimizedEval.tutorSummary.forEach(t => {
-      const curT = curTutorMap[t.id] || { assignedHours: 0 };
-      const subPills = t.competencies.map(cid => {
-        const s = subMap[cid];
-        return s ? `<span class="subject-pill" style="background:${s.color}">${s.short}</span>` : "";
+        return `
+          <tr>
+            <td>
+              <strong>${r.day}</strong>
+              <div style="font-size:0.75rem;color:var(--text-secondary);">${r.hour}:00 &ndash; ${r.hour + 1}:00</div>
+            </td>
+            <td style="font-family:'JetBrains Mono',monospace;">${r.avgArrivals}</td>
+            <td style="font-family:'JetBrains Mono',monospace;">${r.avgOccupancy}</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;">${r.handRaiseLambda}</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-purple);">${r.minTutorsCalculated}</td>
+            <td style="font-family:'JetBrains Mono',monospace;color:var(--accent-rose);">${base.scheduledTutors || 1} (Wq: ${base.wqMinutes || 999}m)</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-emerald);font-size:0.95rem;">${r.scheduledTutors}</td>
+            <td style="font-family:'JetBrains Mono',monospace;">${(r.utilizationRho * 100).toFixed(1)}%</td>
+            <td style="font-family:'JetBrains Mono',monospace;">${(r.pWait * 100).toFixed(1)}%</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:${r.wqMinutes <= 3 ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
+              ${r.wqMinutes} min
+            </td>
+            <td>${statusBadge}</td>
+          </tr>
+        `;
       }).join("");
 
-      const targetHrs = Math.round(
-        (t.role === "GA" ? t.monThuLabHours * appData.parameters.gaLabAllocationRatio : t.monThuLabHours) *
-        (1 - (appData.parameters.budgetCutPercent || 0) / 100)
-      );
-
-      rosterRows += `
-        <tr>
-          <td><strong>${t.name}</strong></td>
-          <td><span class="badge ${t.role === 'GA' ? 'badge-blue' : 'badge-emerald'}">${t.tierLabel}</span></td>
-          <td>${subPills}</td>
-          <td style="font-family:'JetBrains Mono',monospace;">${t.contractHours} hrs/wk (${targetHrs}h Mon–Thu cap)</td>
-          <td style="font-family:'JetBrains Mono',monospace;">${curT.assignedHours} hrs</td>
-          <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-emerald);">
-            ${t.assignedHours} hrs (M:${t.byDay.Monday} T:${t.byDay.Tuesday} W:${t.byDay.Wednesday} R:${t.byDay.Thursday})
-          </td>
-          <td style="font-family:'JetBrains Mono',monospace;">$${t.weeklyPay.toFixed(2)}</td>
-        </tr>
+      schedTableWrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Day &amp; Hour</th>
+              <th>Avg Arrivals</th>
+              <th>Occupancy (N)</th>
+              <th>Hand-Raises (&lambda; = 4N)</th>
+              <th>Min Tutors (Wq&lt;3m)</th>
+              <th>Baseline Staffing (c)</th>
+              <th>Scheduled Tutors (c)</th>
+              <th>Utilization (&rho;)</th>
+              <th>P(Wait)</th>
+              <th>Expected Wait (Wq)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
       `;
-    });
+    }
 
-    document.getElementById("roster-utilization-table-wrap").innerHTML = `
-      <table class="data-table">
-        <thead>
+    // 3. Render Staff Roster Utilization Table (9 GAs + 4 SIs)
+    const rosterWrap = document.getElementById("roster-utilization-table-wrap");
+    if (rosterWrap) {
+      const tutorSummary = optimizedEval.tutorSummary || [];
+      const rosterRowsHtml = tutorSummary.map(t => {
+        const isGA = t.role === "GA";
+        return `
           <tr>
-            <th>Tutor Name</th>
-            <th>Staffing Tier</th>
-            <th>Subject Competencies</th>
-            <th>Contract Limit</th>
-            <th>Current Hrs</th>
-            <th>Optimized Hrs (Mon–Thu Breakdown)</th>
-            <th>Weekly Pay</th>
+            <td><strong>${t.name}</strong></td>
+            <td><span class="badge ${isGA ? 'badge-blue' : 'badge-emerald'}">${t.tierLabel}</span></td>
+            <td style="font-family:'JetBrains Mono',monospace;">${t.contractHours} hrs/wk</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-emerald);">
+              ${t.assignedHours} hrs (M:${t.byDay.Monday} T:${t.byDay.Tuesday} W:${t.byDay.Wednesday} Th:${t.byDay.Thursday})
+            </td>
+            <td style="font-family:'JetBrains Mono',monospace;">$${t.weeklyPay.toFixed(2)}</td>
+            <td style="font-size:0.75rem;color:var(--text-secondary);">${t.notes || 'Assigned via template'}</td>
           </tr>
-        </thead>
-        <tbody>${rosterRows}</tbody>
-      </table>
-    `;
+        `;
+      }).join("");
+
+      rosterWrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Staff Member</th>
+              <th>Staffing Tier</th>
+              <th>Contract Hours</th>
+              <th>Scheduled Hours (Mon&ndash;Thu)</th>
+              <th>Weekly Labor Pay</th>
+              <th>Assigned Template</th>
+            </tr>
+          </thead>
+          <tbody>${rosterRowsHtml}</tbody>
+        </table>
+      `;
+    }
   }
 
   // ==========================================================================
-  // TAB 3: 4-HOUR PROTOTYPE & MATHEMATICAL MODELS
+  // TAB 3: LIVE ERLANG-C CALCULATOR & MATHEMATICAL FORMULATION
   // ==========================================================================
   function renderModelsTab() {
-    const day = document.getElementById("proto-day-select").value || "Monday";
-    const winType = document.getElementById("proto-window-select").value || "afternoon";
-    const mu = engine.getServiceRateMu(appData.parameters);
+    // 1. Live Interactive Erlang-C Queue Calculator
+    const sliderLam = document.getElementById("calc-slider-lam");
+    const sliderMu = document.getElementById("calc-slider-mu");
+    const sliderC = document.getElementById("calc-slider-c");
+    const sliderBeta = document.getElementById("calc-slider-beta");
 
-    document.getElementById("proto-mu-label").textContent = appData.parameters.avgSessionMinutes;
-    document.getElementById("proto-rate-label").textContent = mu.toFixed(2);
+    const valLam = document.getElementById("calc-val-lam");
+    const valMu = document.getElementById("calc-val-mu");
+    const valC = document.getElementById("calc-val-c");
+    const valBeta = document.getElementById("calc-val-beta");
+    const outGrid = document.getElementById("calc-outputs-grid");
 
-    const windowHours = winType === "afternoon"
-      ? ["12:00", "13:00", "14:00", "15:00"]
-      : ["09:00", "10:00", "11:00", "12:00"];
+    function updateCalculator() {
+      if (!sliderLam || !sliderMu || !sliderC || !sliderBeta || !outGrid) return;
+      const lam = Number(sliderLam.value) || 32.0;
+      const mu = Number(sliderMu.value) || 20.0;
+      const c = Number(sliderC.value) || 3;
+      const beta = Number(sliderBeta.value) || 1.0;
 
-    const adjArrivals = engine.getAdjustedArrivals(appData.parameters);
-    let WtCur = 0;
-    let WtOpt = 0;
-    let WtCustom = 0;
+      valLam.textContent = lam.toFixed(1);
+      valMu.textContent = mu.toFixed(1);
+      valC.textContent = c;
+      valBeta.textContent = beta.toFixed(2);
 
-    let protoRows = "";
-    windowHours.forEach(hr => {
-      const hrObj = appData.meta.operatingHours.find(h => h.id === hr);
-      const At = adjArrivals[day][hr]._total;
-      const xtCur = appData.currentScheduleTutorsByHour[day][hr].length;
-      const xtOpt = optimizedSchedule[day][hr].length;
-      const customKey = `${day}_${hr}`;
-      const xtCust = customPrototypeXt[customKey] !== undefined ? customPrototypeXt[customKey] : xtOpt;
+      const a = lam / mu;
+      const rho = c > 0 ? (lam / (c * mu)) : 999.0;
+      const pWait = engine.erlangC_PWait(c, lam, mu);
+      const wq = engine.calculateWq(c, lam, mu);
+      const recC = engine.squareRootStaffing(lam, mu, beta);
+      const minTargetC = engine.calculateMinTutors(lam, mu, 3.0);
 
-      const capCur = Math.round(xtCur * mu * 10) / 10;
-      const capOpt = Math.round(xtOpt * mu * 10) / 10;
-      const capCust = Math.round(xtCust * mu * 10) / 10;
+      const isStable = rho < 1.0;
+      const meetsTarget = isStable && wq < 3.0;
 
-      const nextCur = Math.max(0, Math.round((WtCur + At - capCur) * 10) / 10);
-      const nextOpt = Math.max(0, Math.round((WtOpt + At - capOpt) * 10) / 10);
-      const nextCust = Math.max(0, Math.round((WtCustom + At - capCust) * 10) / 10);
+      outGrid.innerHTML = `
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+          <div style="font-size:0.72rem;color:var(--text-secondary);font-weight:700;">OFFERED LOAD (a = &lambda; / &mu;)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:800;color:var(--text-primary);margin-top:0.2rem;">
+            ${a.toFixed(2)} Erlangs
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">Total tutor-hours demanded / hr</div>
+        </div>
 
-      protoRows += `
-        <tr>
-          <td><strong>${hrObj.label}</strong></td>
-          <td style="font-family:'JetBrains Mono',monospace;font-weight:700;">${At} students</td>
-          <td style="font-family:'JetBrains Mono',monospace;">
-            x<sub>t</sub> = ${xtCur} &rarr; Cap = ${capCur}<br/>
-            <span style="color:var(--accent-rose);">W<sub>t</sub>=${WtCur} &rarr; <strong>W<sub>t+1</sub> = ${nextCur}</strong></span>
-          </td>
-          <td style="font-family:'JetBrains Mono',monospace;">
-            x<sub>t</sub> = ${xtOpt} &rarr; Cap = ${capOpt}<br/>
-            <span style="color:var(--accent-emerald);">W<sub>t</sub>=${WtOpt} &rarr; <strong>W<sub>t+1</sub> = ${nextOpt}</strong></span>
-          </td>
-          <td>
-            <div style="display:flex;align-items:center;gap:0.5rem;">
-              <input type="number" class="num-input proto-xt-input" data-key="${customKey}" min="1" max="12" value="${xtCust}" />
-              <span style="font-family:'JetBrains Mono',monospace;font-size:0.78rem;">
-                Cap=${capCust} | W<sub>t</sub>=${WtCustom} &rarr; <strong style="color:var(--accent-primary);">W<sub>t+1</sub>=${nextCust}</strong>
-              </span>
-            </div>
-          </td>
-        </tr>
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+          <div style="font-size:0.72rem;color:var(--text-secondary);font-weight:700;">TUTOR UTILIZATION (&rho;)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:800;color:${isStable ? 'var(--accent-emerald)' : 'var(--accent-rose)'};margin-top:0.2rem;">
+            ${(rho * 100).toFixed(1)}%
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">${isStable ? 'Queue Stable (&rho; &lt; 100%)' : 'Queue Overloaded (&rho; &ge; 100%)'}</div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+          <div style="font-size:0.72rem;color:var(--text-secondary);font-weight:700;">PROBABILITY OF WAITING P(Wait)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:800;color:var(--accent-primary);margin-top:0.2rem;">
+            ${(pWait * 100).toFixed(1)}%
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">Erlang-C formula C(c, a)</div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+          <div style="font-size:0.72rem;color:var(--text-secondary);font-weight:700;">EXPECTED WAIT TIME (W_q)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:800;color:${meetsTarget ? 'var(--accent-emerald)' : 'var(--accent-rose)'};margin-top:0.2rem;">
+            ${isStable ? wq.toFixed(2) + ' min' : '999 min (Overflow)'}
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">Target: &lt; 3.0 min</div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+          <div style="font-size:0.72rem;color:var(--text-secondary);font-weight:700;">SQUARE-ROOT LAW (c_sqrt)</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:800;color:var(--accent-amber);margin-top:0.2rem;">
+            ${recC} Tutors
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">c = ceil(a + &beta;&radic;a)</div>
+        </div>
+
+        <div style="background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;padding:0.75rem;">
+          <div style="font-size:0.72rem;color:var(--text-secondary);font-weight:700;">MIN TUTORS FOR W_q &lt; 3m</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:1.25rem;font-weight:800;color:var(--accent-purple);margin-top:0.2rem;">
+            ${minTargetC} Tutors
+          </div>
+          <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.15rem;">Workbook Column F formula</div>
+        </div>
       `;
-
-      WtCur = nextCur;
-      WtOpt = nextOpt;
-      WtCustom = nextCust;
-    });
-
-    document.getElementById("prototype-table-wrap").innerHTML = `
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>Hour Block (<em>t</em>)</th>
-            <th>Arrivals (&lambda;<sub>t</sub>)</th>
-            <th>Current Staffing Recurrence (W<sub>t+1</sub>)</th>
-            <th>Optimized Staffing Recurrence (W<sub>t+1</sub>)</th>
-            <th>Live Sandbox: Test Custom Tutors (x<sub>t</sub>)</th>
-          </tr>
-        </thead>
-        <tbody>${protoRows}</tbody>
-      </table>
-    `;
-
-    document.querySelectorAll(".proto-xt-input").forEach(inp => {
-      inp.addEventListener("input", (e) => {
-        const key = e.target.getAttribute("data-key");
-        customPrototypeXt[key] = Math.max(1, parseInt(e.target.value, 10) || 1);
-        renderModelsTab();
-      });
-    });
-
-    // Helper to apply walk-in delta to hourlyArrivals when a class release driver is modified
-    function applyClassScheduleDelta(days, hourId, subjectId, deltaWalkIns) {
-      if (!deltaWalkIns || !hourId || !subjectId) return;
-      const targetDays = Array.isArray(days) && days.length > 0 ? days : appData.meta.operatingDays;
-      targetDays.forEach(d => {
-        if (appData.hourlyArrivals[d] && appData.hourlyArrivals[d][hourId]) {
-          const cur = Number(appData.hourlyArrivals[d][hourId][subjectId]) || 0;
-          appData.hourlyArrivals[d][hourId][subjectId] = Math.max(0, Math.round(cur + deltaWalkIns));
-        }
-      });
     }
 
-    // Render Lecturer Pool Bar
+    if (sliderLam && !sliderLam._bound) {
+      sliderLam._bound = true;
+      sliderLam.addEventListener("input", updateCalculator);
+      sliderMu.addEventListener("input", updateCalculator);
+      sliderC.addEventListener("input", updateCalculator);
+      sliderBeta.addEventListener("input", updateCalculator);
+    }
+    updateCalculator();
+
+    // 2. Render Lecturer Pool Bar
     const poolBarEl = document.getElementById("lecturer-pool-bar");
     if (poolBarEl) {
-      const profChips = (appData.lecturers || []).map((prof, pIdx) => `
+      const profChips = (appData.lecturers || []).map(prof => `
         <span class="tutor-chip active" style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.22rem 0.55rem;font-size:0.76rem;">
           <span>👨‍🏫 ${prof}</span>
-          <button type="button" class="btn-remove-pool-prof" data-prof="${prof.replace(/"/g, '&quot;')}" title="Remove ${prof} from Lecturer dropdown list" style="background:none;border:none;color:var(--accent-rose);cursor:pointer;font-weight:800;font-size:0.78rem;padding:0 0.1rem;line-height:1;">✕</button>
+          <button type="button" class="btn-remove-pool-prof" data-prof="${prof.replace(/"/g, '&quot;')}" title="Remove ${prof}" style="background:none;border:none;color:var(--accent-rose);cursor:pointer;font-weight:800;font-size:0.78rem;padding:0 0.1rem;line-height:1;">✕</button>
         </span>
       `).join("");
 
@@ -901,8 +1094,8 @@
           showToast(`${name} is already in the Lecturer list`);
         }
       };
-      addPoolBtn.addEventListener("click", handleAddPoolProf);
-      addPoolInp.addEventListener("keydown", e => {
+      if (addPoolBtn) addPoolBtn.addEventListener("click", handleAddPoolProf);
+      if (addPoolInp) addPoolInp.addEventListener("keydown", e => {
         if (e.key === "Enter") handleAddPoolProf();
       });
 
@@ -921,296 +1114,113 @@
       });
     }
 
-    // Render Editable Class Schedule Release Drivers table
+    // 3. Render Class Schedule Summary Table
     const subMap = {};
-    appData.subjects.forEach(s => { subMap[s.id] = s; });
+    (appData.subjects || []).forEach(s => { subMap[s.id] = s; });
 
-    const classRows = appData.classSchedule.map((c, idx) => {
-      const s = subMap[c.subject] || appData.subjects[0];
-      const walkInsVal = typeof c.walkIns === "number"
-        ? c.walkIns
-        : Math.round(((c.enrolled || 0) * (c.expectedLabCapturePct || 10)) / 100);
-      const capturePct = c.enrolled > 0 ? Math.round((walkInsVal / c.enrolled) * 100) : 0;
+    const classTableWrap = document.getElementById("class-schedule-summary-wrap");
+    if (classTableWrap) {
+      const classRows = appData.classSchedule.map((c, idx) => {
+        const s = subMap[c.subject] || appData.subjects[0];
+        const assignedList = Array.isArray(c.lecturers) ? c.lecturers : [];
+        const assignedBadges = assignedList.map(prof => `
+          <span class="badge badge-blue" style="display:inline-flex;align-items:center;gap:0.28rem;margin:0.12rem 0.2rem 0.12rem 0;padding:0.2rem 0.48rem;font-size:0.73rem;">
+            <span>${prof}</span>
+            <button type="button" class="btn-remove-class-prof" data-idx="${idx}" data-prof="${prof.replace(/"/g, '&quot;')}" title="Remove ${prof}" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:800;font-size:0.75rem;padding:0;line-height:1;">✕</button>
+          </span>
+        `).join("");
 
-      // Subject dropdown options
-      const subjectOptions = appData.subjects.map(sub => `
-        <option value="${sub.id}" ${sub.id === c.subject ? "selected" : ""}>${sub.name} (${sub.short})</option>
-      `).join("");
+        const unassignedProfs = (appData.lecturers || []).filter(p => !assignedList.includes(p));
+        const profDropdownOptions = unassignedProfs.map(p => `<option value="${p.replace(/"/g, '&quot;')}">${p}</option>`).join("");
 
-      // Release hour dropdown options
-      const releaseHourOptions = appData.meta.operatingHours.map(h => `
-        <option value="${h.id}" ${h.id === c.releaseHour ? "selected" : ""}>Lets out &rarr; ${h.label} (${h.id})</option>
-      `).join("");
-
-      // Assigned lecturers badges for this class & section
-      const assignedList = Array.isArray(c.lecturers) ? c.lecturers : [];
-      const assignedBadges = assignedList.map(prof => `
-        <span class="badge badge-blue" style="display:inline-flex;align-items:center;gap:0.28rem;margin:0.12rem 0.2rem 0.12rem 0;padding:0.2rem 0.48rem;font-size:0.73rem;">
-          <span>${prof}</span>
-          <button type="button" class="btn-remove-class-prof" data-idx="${idx}" data-prof="${prof.replace(/"/g, '&quot;')}" title="Remove ${prof} from ${c.code}" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:800;font-size:0.75rem;padding:0;line-height:1;">✕</button>
-        </span>
-      `).join("");
-
-      // Dropdown options to assign a professor to this class & section
-      const profDropdownOptions = (appData.lecturers || []).map(prof => `
-        <option value="${prof.replace(/"/g, '&quot;')}">${assignedList.includes(prof) ? "✓ " : "+ "}${prof}</option>
-      `).join("");
-
-      return `
-        <tr>
-          <td style="min-width:175px;">
-            <input type="text" class="text-input edit-class-code" data-idx="${idx}" value="${(c.code || '').replace(/"/g, '&quot;')}" placeholder="Course Code (e.g. MATH 112-01)" style="width:100%;font-weight:700;margin-bottom:0.3rem;padding:0.28rem 0.5rem;font-size:0.8rem;" />
-            <input type="text" class="text-input edit-class-title" data-idx="${idx}" value="${(c.title || '').replace(/"/g, '&quot;')}" placeholder="Section Title" style="width:100%;font-size:0.74rem;color:var(--text-secondary);padding:0.24rem 0.5rem;" />
-          </td>
-          <td style="min-width:155px;">
-            <div style="display:flex;align-items:center;gap:0.4rem;">
-              <span style="width:10px;height:10px;border-radius:50%;background:${s ? s.color : '#3b82f6'};flex-shrink:0;"></span>
-              <select class="text-input edit-class-subject" data-idx="${idx}" style="width:100%;font-weight:600;padding:0.28rem 0.45rem;font-size:0.78rem;">
-                ${subjectOptions}
-              </select>
-            </div>
-          </td>
-          <td style="min-width:215px;">
-            <div style="margin-bottom:0.3rem;min-height:24px;">
-              ${assignedBadges || '<span style="font-size:0.73rem;color:var(--text-muted);">No lecturer assigned</span>'}
-            </div>
-            <div style="display:flex;gap:0.3rem;align-items:center;margin-bottom:0.28rem;">
-              <select class="text-input select-class-prof" data-idx="${idx}" style="width:100%;padding:0.24rem 0.45rem;font-size:0.75rem;">
-                <option value="">+ Assign / Toggle Lecturer...</option>
-                ${profDropdownOptions}
-              </select>
-            </div>
-            <div style="display:flex;gap:0.25rem;align-items:center;">
-              <input type="text" class="text-input input-row-new-prof" data-idx="${idx}" placeholder="New Prof. Name..." style="width:100%;padding:0.2rem 0.45rem;font-size:0.73rem;" />
-              <button type="button" class="btn btn-primary btn-row-add-prof" data-idx="${idx}" title="Add new professor to this section & dropdown" style="padding:0.2rem 0.5rem;font-size:0.72rem;white-space:nowrap;">+ Add</button>
-            </div>
-          </td>
-          <td style="min-width:175px;">
-            <input type="text" class="text-input edit-class-time" data-idx="${idx}" value="${(c.classTime || '').replace(/"/g, '&quot;')}" placeholder="e.g. 9:00 AM – 9:50 AM" style="width:100%;font-size:0.77rem;margin-bottom:0.3rem;padding:0.26rem 0.5rem;" />
-            <select class="text-input edit-class-release" data-idx="${idx}" style="width:100%;font-weight:700;color:var(--accent-amber);padding:0.26rem 0.45rem;font-size:0.77rem;">
-              ${releaseHourOptions}
-            </select>
-          </td>
-          <td style="min-width:165px;font-family:'JetBrains Mono',monospace;">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.35rem;margin-bottom:0.3rem;">
-              <span style="font-size:0.73rem;color:var(--text-secondary);">Enrolled:</span>
-              <input type="number" class="num-input edit-class-enrolled" data-idx="${idx}" min="0" max="1000" value="${c.enrolled}" style="width:72px;padding:0.22rem 0.4rem;font-size:0.78rem;" />
-            </div>
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.35rem;">
-              <span style="font-size:0.73rem;color:var(--accent-emerald);font-weight:700;">Walk-ins/hr:</span>
-              <input type="number" class="num-input edit-class-walkins" data-idx="${idx}" min="0" max="500" value="${walkInsVal}" style="width:72px;padding:0.22rem 0.4rem;font-size:0.78rem;border-color:var(--accent-emerald);" />
-            </div>
-            <div style="font-size:0.69rem;color:var(--text-muted);text-align:right;margin-top:0.18rem;">
-              ~${capturePct}% lab capture rate
-            </div>
-          </td>
-          <td style="min-width:180px;">
-            <div style="display:flex;align-items:center;gap:0.4rem;">
-              <input type="text" class="text-input edit-class-note" data-idx="${idx}" value="${(c.impactNote || '').replace(/"/g, '&quot;')}" placeholder="Lab impact note..." style="width:100%;font-size:0.75rem;padding:0.26rem 0.5rem;" />
-              <button type="button" class="btn btn-delete-class-row" data-idx="${idx}" title="Remove this course section" style="padding:0.24rem 0.5rem;color:var(--accent-rose);border-color:rgba(244,63,94,0.35);font-size:0.76rem;">✕</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join("");
-
-    document.getElementById("class-schedule-summary-wrap").innerHTML = `
-      <table class="data-table">
-        <thead>
+        return `
           <tr>
-            <th>Course Section</th>
-            <th>Subject</th>
-            <th>Lecturer (Add / Remove per Section)</th>
-            <th>Lecture &amp; Release Time</th>
-            <th>Enrolled / Walk-Ins</th>
-            <th>Lab Impact &amp; Actions</th>
+            <td>
+              <input type="text" class="text-input cs-field" data-idx="${idx}" data-field="code" value="${c.code}" style="width:105px;font-weight:700;" />
+              <input type="text" class="text-input cs-field" data-idx="${idx}" data-field="title" value="${c.title}" style="width:100%;font-size:0.75rem;margin-top:0.25rem;" />
+            </td>
+            <td>
+              <div style="min-height:26px;margin-bottom:0.3rem;">
+                ${assignedBadges || '<span style="font-size:0.74rem;color:var(--text-muted);font-style:italic;">No lecturer assigned</span>'}
+              </div>
+              <div style="display:flex;align-items:center;gap:0.3rem;">
+                <select class="text-input select-add-class-prof" data-idx="${idx}" style="padding:0.2rem 0.4rem;font-size:0.74rem;max-width:140px;">
+                  <option value="">+ Assign Lecturer...</option>
+                  ${profDropdownOptions}
+                </select>
+              </div>
+            </td>
+            <td style="font-family:'JetBrains Mono',monospace;">${c.classTime}</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-primary);">Lets out &rarr; ${c.releaseHour}:00</td>
+            <td style="font-family:'JetBrains Mono',monospace;">${c.enrolled} enrolled</td>
+            <td style="font-family:'JetBrains Mono',monospace;font-weight:700;color:var(--accent-rose);">+${c.walkIns || 0} hand-raises</td>
+            <td>
+              <button type="button" class="btn btn-rose btn-remove-class-row" data-idx="${idx}" style="padding:0.25rem 0.55rem;font-size:0.74rem;">✕</button>
+            </td>
           </tr>
-        </thead>
-        <tbody>${classRows}</tbody>
-      </table>
-    `;
+        `;
+      }).join("");
 
-    // Bind events for editable Class Schedule Release Drivers
-    document.querySelectorAll(".edit-class-code").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        appData.classSchedule[idx].code = e.target.value.trim();
-        saveState(`Updated course code: ${appData.classSchedule[idx].code}`);
+      classTableWrap.innerHTML = `
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Course &amp; Title</th>
+              <th>Assigned Lecturer(s)</th>
+              <th>Meeting Time</th>
+              <th>Release Hour</th>
+              <th>Enrolled</th>
+              <th>Expected Lab Arrivals</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>${classRows}</tbody>
+        </table>
+      `;
+
+      // Bind class lecturer assignment dropdowns
+      classTableWrap.querySelectorAll(".select-add-class-prof").forEach(sel => {
+        sel.addEventListener("change", e => {
+          const idx = parseInt(e.target.getAttribute("data-idx"), 10);
+          const prof = e.target.value;
+          if (!prof || !appData.classSchedule[idx]) return;
+          if (!Array.isArray(appData.classSchedule[idx].lecturers)) {
+            appData.classSchedule[idx].lecturers = [];
+          }
+          if (!appData.classSchedule[idx].lecturers.includes(prof)) {
+            appData.classSchedule[idx].lecturers.push(prof);
+            saveState(`Assigned ${prof} to ${appData.classSchedule[idx].code}`);
+            renderModelsTab();
+          }
+        });
       });
-    });
 
-    document.querySelectorAll(".edit-class-title").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        appData.classSchedule[idx].title = e.target.value.trim();
-        saveState(`Updated section title for ${appData.classSchedule[idx].code}`);
+      // Bind remove class prof buttons
+      classTableWrap.querySelectorAll(".btn-remove-class-prof").forEach(btn => {
+        btn.addEventListener("click", e => {
+          const idx = parseInt(e.currentTarget.getAttribute("data-idx"), 10);
+          const prof = e.currentTarget.getAttribute("data-prof");
+          if (appData.classSchedule[idx] && Array.isArray(appData.classSchedule[idx].lecturers)) {
+            appData.classSchedule[idx].lecturers = appData.classSchedule[idx].lecturers.filter(p => p !== prof);
+            saveState(`Removed ${prof} from ${appData.classSchedule[idx].code}`);
+            renderModelsTab();
+          }
+        });
       });
-    });
 
-    document.querySelectorAll(".edit-class-subject").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        const c = appData.classSchedule[idx];
-        const oldSub = c.subject;
-        const newSub = e.target.value;
-        const walkInsVal = typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
-        if (oldSub !== newSub) {
-          applyClassScheduleDelta(c.days, c.releaseHour, oldSub, -walkInsVal);
-          applyClassScheduleDelta(c.days, c.releaseHour, newSub, walkInsVal);
-          c.subject = newSub;
-          saveState(`Updated ${c.code} subject to ${newSub.toUpperCase()}`);
-          renderAll(true);
-        }
-      });
-    });
-
-    // Lecturer dropdown select / toggle per class & section
-    document.querySelectorAll(".select-class-prof").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        const prof = e.target.value;
-        if (!prof) return;
-        const c = appData.classSchedule[idx];
-        if (!Array.isArray(c.lecturers)) c.lecturers = [];
-        if (c.lecturers.includes(prof)) {
-          c.lecturers = c.lecturers.filter(p => p !== prof);
-          saveState(`Removed ${prof} from ${c.code}`);
-        } else {
-          c.lecturers.push(prof);
-          saveState(`Assigned ${prof} to ${c.code}`);
-        }
-        renderModelsTab();
-      });
-    });
-
-    // Remove assigned lecturer badge from a specific class & section
-    document.querySelectorAll(".btn-remove-class-prof").forEach(btn => {
-      btn.addEventListener("click", e => {
-        const idx = Number(e.currentTarget.getAttribute("data-idx"));
-        const prof = e.currentTarget.getAttribute("data-prof");
-        const c = appData.classSchedule[idx];
-        if (Array.isArray(c.lecturers)) {
-          c.lecturers = c.lecturers.filter(p => p !== prof);
-          saveState(`Removed ${prof} from ${c.code}`);
-          renderModelsTab();
-        }
-      });
-    });
-
-    // Add brand-new professor directly inside a class row
-    document.querySelectorAll(".btn-row-add-prof").forEach(btn => {
-      btn.addEventListener("click", e => {
-        const idx = Number(e.currentTarget.getAttribute("data-idx"));
-        const inp = document.querySelector(`.input-row-new-prof[data-idx="${idx}"]`);
-        const name = inp ? inp.value.trim() : "";
-        if (!name) return;
-        if (!appData.lecturers.includes(name)) {
-          appData.lecturers.push(name);
-        }
-        const c = appData.classSchedule[idx];
-        if (!Array.isArray(c.lecturers)) c.lecturers = [];
-        if (!c.lecturers.includes(name)) {
-          c.lecturers.push(name);
-        }
-        saveState(`Added lecturer ${name} to ${c.code}`);
-        renderModelsTab();
-      });
-    });
-
-    document.querySelectorAll(".input-row-new-prof").forEach(inp => {
-      inp.addEventListener("keydown", e => {
-        if (e.key === "Enter") {
-          const idx = Number(e.target.getAttribute("data-idx"));
-          const btn = document.querySelector(`.btn-row-add-prof[data-idx="${idx}"]`);
-          if (btn) btn.click();
-        }
-      });
-    });
-
-    // Lecture time text input
-    document.querySelectorAll(".edit-class-time").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        appData.classSchedule[idx].classTime = e.target.value.trim();
-        saveState(`Updated lecture time for ${appData.classSchedule[idx].code}`);
-      });
-    });
-
-    // Release hour dropdown
-    document.querySelectorAll(".edit-class-release").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        const c = appData.classSchedule[idx];
-        const oldHr = c.releaseHour;
-        const newHr = e.target.value;
-        const walkInsVal = typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
-        if (oldHr !== newHr) {
-          applyClassScheduleDelta(c.days, oldHr, c.subject, -walkInsVal);
-          applyClassScheduleDelta(c.days, newHr, c.subject, walkInsVal);
-          c.releaseHour = newHr;
-          saveState(`Moved ${c.code} release wave from ${oldHr} to ${newHr}`);
-          renderAll(true);
-        }
-      });
-    });
-
-    // Enrolled count input
-    document.querySelectorAll(".edit-class-enrolled").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        const c = appData.classSchedule[idx];
-        c.enrolled = Math.max(0, parseInt(e.target.value, 10) || 0);
-        const walkInsVal = typeof c.walkIns === "number" ? c.walkIns : 0;
-        c.expectedLabCapturePct = c.enrolled > 0 ? Math.round((walkInsVal / c.enrolled) * 100) : 0;
-        saveState(`Updated enrollment for ${c.code} (${c.enrolled} students)`);
-        renderModelsTab();
-      });
-    });
-
-    // Walk-ins per hour input (syncs delta directly to hourlyArrivals & model!)
-    document.querySelectorAll(".edit-class-walkins").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        const c = appData.classSchedule[idx];
-        const oldWalkIns = typeof c.walkIns === "number" ? c.walkIns : Math.round((c.enrolled * c.expectedLabCapturePct) / 100);
-        const newWalkIns = Math.max(0, parseInt(e.target.value, 10) || 0);
-        const delta = newWalkIns - oldWalkIns;
-        c.walkIns = newWalkIns;
-        c.expectedLabCapturePct = c.enrolled > 0 ? Math.round((newWalkIns / c.enrolled) * 100) : 0;
-        applyClassScheduleDelta(c.days, c.releaseHour, c.subject, delta);
-        saveState(`Updated ${c.code} walk-ins to ~${newWalkIns}/hr`);
-        renderAll(true);
-      });
-    });
-
-    // Lab impact note input
-    document.querySelectorAll(".edit-class-note").forEach(el => {
-      el.addEventListener("change", e => {
-        const idx = Number(e.target.getAttribute("data-idx"));
-        appData.classSchedule[idx].impactNote = e.target.value.trim();
-        saveState(`Updated impact note for ${appData.classSchedule[idx].code}`);
-      });
-    });
-
-    // Delete class section row
-    document.querySelectorAll(".btn-delete-class-row").forEach(btn => {
-      btn.addEventListener("click", e => {
-        const idx = Number(e.currentTarget.getAttribute("data-idx"));
-        const removed = appData.classSchedule.splice(idx, 1)[0];
-        if (removed) {
-          const walkInsVal = typeof removed.walkIns === "number" ? removed.walkIns : 0;
-          applyClassScheduleDelta(removed.days, removed.releaseHour, removed.subject, -walkInsVal);
+      // Bind delete class section button
+      classTableWrap.querySelectorAll(".btn-remove-class-row").forEach(btn => {
+        btn.addEventListener("click", e => {
+          const idx = parseInt(e.currentTarget.getAttribute("data-idx"), 10);
+          const removed = appData.classSchedule.splice(idx, 1)[0];
           saveState(`Removed course section ${removed.code}`);
-          renderAll(true);
-        }
+          renderModelsTab();
+        });
       });
-    });
+    }
   }
 
-  // ==========================================================================
-  // TAB 4: LIVE DATA, ROSTER & ARRIVALS STUDIO
-  // ==========================================================================
-  function renderEditorTab() {
+function renderEditorTab() {
     // 1. Render Editable Tutor Roster Table
     let tutorRows = "";
     appData.tutors.forEach((t, idx) => {
@@ -2375,19 +2385,19 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
 
     function syncSlidersToUI() {
       const p = appData.parameters;
-      sliderSurge.value = p.trafficSurgePercent;
-      document.getElementById("val-surge").textContent = (p.trafficSurgePercent >= 0 ? "+" : "") + p.trafficSurgePercent + "%";
+      sliderSurge.value = p.trafficSurgePercent || 0;
+      document.getElementById("val-surge").textContent = (p.trafficSurgePercent >= 0 ? "+" : "") + (p.trafficSurgePercent || 0) + "%";
 
-      sliderSession.value = p.avgSessionMinutes;
-      document.getElementById("val-session").textContent = p.avgSessionMinutes + " min";
+      sliderSession.value = p.muTutor || 20;
+      document.getElementById("val-session").textContent = (p.muTutor || 20) + " / hr";
 
-      sliderBudgetCut.value = p.budgetCutPercent;
-      document.getElementById("val-budget-cut").textContent = (p.budgetCutPercent > 0 ? "-" : (p.budgetCutPercent < 0 ? "+" : "")) + Math.abs(p.budgetCutPercent) + "%";
+      sliderBudgetCut.value = p.safetyFactorBeta || 1.0;
+      document.getElementById("val-budget-cut").textContent = "β = " + Number(p.safetyFactorBeta || 1.0).toFixed(2);
 
-      sliderSmoothing.value = p.demandSmoothingPercent;
-      document.getElementById("val-smoothing").textContent = p.demandSmoothingPercent + "%";
+      sliderSmoothing.value = p.demandSmoothingPercent || 0;
+      document.getElementById("val-smoothing").textContent = (p.demandSmoothingPercent || 0) + "%";
 
-      selectObjective.value = p.optimizationObjective;
+      selectObjective.value = p.optimizationObjective || "erlang_c_weighted_wait";
     }
 
     sliderSurge.addEventListener("input", e => {
@@ -2397,13 +2407,13 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
     });
 
     sliderSession.addEventListener("input", e => {
-      appData.parameters.avgSessionMinutes = Number(e.target.value);
+      appData.parameters.muTutor = Number(e.target.value);
       syncSlidersToUI();
       renderAll(true);
     });
 
     sliderBudgetCut.addEventListener("input", e => {
-      appData.parameters.budgetCutPercent = Number(e.target.value);
+      appData.parameters.safetyFactorBeta = Number(e.target.value);
       syncSlidersToUI();
       renderAll(true);
     });
@@ -2427,33 +2437,28 @@ window.MATH_LAB_DEFAULT_DATA = ${JSON.stringify(appData, null, 2)};
         const preset = pill.getAttribute("data-preset");
         if (preset === "baseline") {
           appData.parameters.trafficSurgePercent = 0;
-          appData.parameters.avgSessionMinutes = 20;
-          appData.parameters.budgetCutPercent = 0;
+          appData.parameters.muTutor = 20;
+          appData.parameters.safetyFactorBeta = 1.0;
           appData.parameters.demandSmoothingPercent = 0;
+          appData.templateAssignments = clone(window.MATH_LAB_DEFAULT_DATA.initialTemplateAssignments);
+        } else if (preset === "optimal") {
+          appData.parameters.trafficSurgePercent = 0;
+          appData.parameters.muTutor = 20;
+          appData.parameters.safetyFactorBeta = 1.0;
+          appData.parameters.demandSmoothingPercent = 0;
+          appData.templateAssignments = clone(window.MATH_LAB_DEFAULT_DATA.optimalTemplateAssignments);
         } else if (preset === "midterm") {
           appData.parameters.trafficSurgePercent = 30;
-          appData.parameters.avgSessionMinutes = 20;
-          appData.parameters.budgetCutPercent = 0;
-          appData.parameters.demandSmoothingPercent = 0;
-        } else if (preset === "long_sessions") {
-          appData.parameters.trafficSurgePercent = 0;
-          appData.parameters.avgSessionMinutes = 30;
-          appData.parameters.budgetCutPercent = 0;
-          appData.parameters.demandSmoothingPercent = 0;
-        } else if (preset === "budget_cut") {
-          appData.parameters.trafficSurgePercent = 0;
-          appData.parameters.avgSessionMinutes = 20;
-          appData.parameters.budgetCutPercent = 15;
+          appData.parameters.muTutor = 20;
           appData.parameters.demandSmoothingPercent = 0;
         } else if (preset === "demand_nudge") {
           appData.parameters.trafficSurgePercent = 0;
-          appData.parameters.avgSessionMinutes = 20;
-          appData.parameters.budgetCutPercent = 0;
+          appData.parameters.muTutor = 20;
           appData.parameters.demandSmoothingPercent = 15;
         }
         syncSlidersToUI();
         renderAll(true);
-        showToast(`Applied scenario preset: ${pill.textContent}`);
+        showToast(`Applied preset: ${pill.textContent}`);
       });
     });
 

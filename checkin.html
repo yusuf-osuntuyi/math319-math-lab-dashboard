@@ -75,20 +75,37 @@
       border-radius: 99px;
       transition: width 0.25s ease;
     }
+    .checked-in-success-banner {
+      background: rgba(16, 185, 129, 0.14);
+      border: 2px solid var(--accent-emerald);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.1rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+    .checked-in-success-banner.visible {
+      display: block;
+    }
   </style>
 </head>
 <body>
   <main class="mobile-shell">
     <div class="mobile-header-card">
-      <span class="brand-badge" id="m-mode-badge">MATH 319 &bull; GAMIFIED STUDENT PORTAL</span>
+      <div style="display:flex;align-items:center;justify-content:center;gap:0.45rem;flex-wrap:wrap;">
+        <span class="brand-badge" id="m-mode-badge">MATH 319 &bull; GAMIFIED STUDENT PORTAL</span>
+        <span class="badge badge-emerald" id="m-live-sync-indicator" style="font-size:0.65rem;">🟢 Live Cloud Sync Active</span>
+      </div>
       <h1 id="m-page-title">University Math Lab</h1>
-      <p id="m-page-subtitle">Enter only your name — click any student name to view/edit their 16-Bit Bio!</p>
+      <p id="m-page-subtitle">Enter only your name — syncs live to the Math Lab Dashboard!</p>
       <div style="margin-top:0.65rem;">
         <a href="index.html" class="btn" style="text-decoration:none;font-size:0.74rem;padding:0.28rem 0.65rem;">
           &larr; Back to Full Analytics Dashboard
         </a>
       </div>
     </div>
+
+    <!-- LIVE CHECKED-IN CONFIRMATION BANNER ON MOBILE -->
+    <div id="m-checked-in-banner" class="checked-in-success-banner" role="status" aria-live="polite"></div>
 
     <!-- IDEA #1: 2x DOUBLE XP QUIET-HOUR FORECAST BAR -->
     <div class="card" style="padding:0.95rem 1.05rem;margin-bottom:1rem;border-color:rgba(16,185,129,0.45);">
@@ -107,7 +124,7 @@
         ✅ QR #1: Check In
       </button>
       <button type="button" class="mode-btn" id="btn-mode-out">
-        👋 QR #2: Check Out (+100 XP)
+        👋 QR #2: Check Out (<span id="m-active-count-pill">3</span> in Lab)
       </button>
     </div>
 
@@ -154,16 +171,16 @@
       </form>
     </div>
 
-    <!-- SCREEN 2: 1-TAP NAME-ONLY CHECK-OUT CARD (QR Code #2 ?mode=out) -->
-    <div class="card" id="card-mode-out" style="display:none;">
+    <!-- ALWAYS-VISIBLE LIVE BOARD OF STUDENTS CURRENTLY CHECKED IN -->
+    <div class="card" id="card-mode-out">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>Leaving? Tap Your Name to Check Out (+100 XP)</h2>
-          <p>Click any student's name to view their <strong>16-Bit Bio</strong>, or tap <strong>👋 Check Out</strong> to claim +100 XP!</p>
+          <h2>🟢 Students Currently Checked In to the Lab</h2>
+          <p>Tap <strong>👋 Check Out (+100 XP)</strong> when you leave, or tap any student's name to view their <strong>16-Bit Bio</strong>!</p>
         </div>
       </div>
       <div class="kiosk-form-group" style="margin-bottom:0.85rem;">
-        <label for="m-checkout-search">Find Your Name</label>
+        <label for="m-checkout-search">Filter Checked-In Students by Name</label>
         <input type="text" id="m-checkout-search" name="checkout_search" class="kiosk-input" placeholder="Type your name to filter..." autocomplete="name" />
       </div>
       <div id="m-active-list"></div>
@@ -240,9 +257,29 @@
     (function () {
       const STORAGE_KEY = "MATH319_LAB_DASHBOARD_STATE_V1";
       const LAST_STUDENT_KEY = "MATH319_REMEMBERED_STUDENT_NAME";
+      // Real-time Cross-Device Sync Channel (Phone <-> Laptop Dashboard)
+      const SYNC_TOPIC = "emu_math319_lab_yusuf_2026_v2";
+      const SYNC_URL = "https://ntfy.sh/" + SYNC_TOPIC;
+      const DEVICE_ID = "mob-" + Math.random().toString(36).slice(2, 9);
+      let seenEventIds = new Set();
+
       let selectedHour = "09:00";
       let editAvatarId = "pixel-wizard";
       let editCustomUrl = null;
+
+      function broadcastCloudSync(actionType, payload) {
+        try {
+          fetch(SYNC_URL, {
+            method: "POST",
+            body: JSON.stringify({
+              sender: DEVICE_ID,
+              ts: Date.now(),
+              action: actionType,
+              payload: payload
+            })
+          }).catch(() => {});
+        } catch (e) {}
+      }
 
       function getLevelInfo(xp) {
         const val = Number(xp) || 0;
@@ -261,7 +298,7 @@
             if (parsed && parsed.tutors && parsed.hourlyArrivals) {
               if (!Array.isArray(parsed.attendanceLog)) parsed.attendanceLog = JSON.parse(JSON.stringify(def.attendanceLog || []));
               if (!Array.isArray(parsed.studentProfiles)) parsed.studentProfiles = JSON.parse(JSON.stringify(def.studentProfiles || []));
-              parsed.studentProfiles.forEach((p, i) => {
+              parsed.studentProfiles.forEach((p) => {
                 const dp = (def.studentProfiles || []).find(x => x.name.toLowerCase() === (p.name || "").toLowerCase());
                 const parts = (p.name || "Student").split(/\s+/);
                 if (!p.firstName) p.firstName = (dp && dp.firstName) || parts[0];
@@ -287,7 +324,7 @@
           t.textContent = msg;
           t.classList.add("show");
           clearTimeout(t._timer);
-          t._timer = setTimeout(() => t.classList.remove("show"), 3000);
+          t._timer = setTimeout(() => t.classList.remove("show"), 3200);
         }
       }
 
@@ -300,6 +337,41 @@
         const slot = (state.hourlyArrivals && state.hourlyArrivals.Monday && state.hourlyArrivals.Monday[hr]) || {};
         const total = (Number(slot.alg) || 0) + (Number(slot.trig) || 0) + (Number(slot.pre) || 0) + (Number(slot.calc) || 0) + (Number(slot.stats) || 0);
         return total <= 10;
+      }
+
+      function renderCheckedInBanner(rec, prof) {
+        const banner = document.getElementById("m-checked-in-banner");
+        if (!banner || !rec) return;
+        const lvl = getLevelInfo(prof ? prof.xp : 150);
+        banner.classList.add("visible");
+        banner.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:0.7rem;">
+              ${window.renderStudentAvatar(prof || "pixel-wizard", 48)}
+              <div>
+                <div style="font-size:0.72rem;font-weight:800;color:var(--accent-emerald);text-transform:uppercase;letter-spacing:0.04em;">
+                  ✅ YOU ARE CHECKED IN! (Synced to Lab Dashboard)
+                </div>
+                <div style="font-size:1.05rem;font-weight:800;color:var(--text-primary);margin-top:0.1rem;">
+                  ${rec.studentName} &bull; <span style="color:var(--accent-amber);">🔥 ${prof ? prof.streak : 1} Streak</span>
+                </div>
+                <div style="font-size:0.77rem;color:var(--text-secondary);">
+                  ${rec.courseCode} (${rec.lecturer}) &bull; Checked in at ${rec.checkInTime} &bull; +${rec.xpEarned} XP earned!
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary" id="m-banner-checkout-now" data-id="${rec.id}" style="min-height:44px;font-weight:800;">
+              👋 Tap to Check Out (+100 XP)
+            </button>
+          </div>
+        `;
+        const outBtn = document.getElementById("m-banner-checkout-now");
+        if (outBtn) {
+          outBtn.addEventListener("click", () => {
+            performCheckoutById(rec.id);
+            banner.classList.remove("visible");
+          });
+        }
       }
 
       function renderBusynessBar() {
@@ -346,7 +418,7 @@
         const existing = (state.studentProfiles || []).find(p => p.name.toLowerCase() === clean.toLowerCase());
         if (existing) return existing;
         const parts = clean.split(/\s+/);
-        const firstClass = (state.classSchedule && state.classSchedule[0]) || { code: "MATH 112-01", subject: "trig", lecturers: ["Prof. Ross"] };
+        const firstClass = (state.classSchedule && state.classSchedule[0]) || { code: "MATH 112-01", subject: "trig", lecturers: ["Dr. Andrew Ross"] };
         const newProf = {
           name: clean,
           firstName: parts[0] || "Student",
@@ -356,7 +428,7 @@
           avatarId: "pixel-wizard",
           courseCode: firstClass.code || "MATH 112-01",
           subject: firstClass.subject || "trig",
-          lecturer: Array.isArray(firstClass.lecturers) ? firstClass.lecturers.join(", ") : "Prof. Ross",
+          lecturer: Array.isArray(firstClass.lecturers) ? firstClass.lecturers.join(", ") : "Dr. Andrew Ross",
           xp: 100,
           streak: 1,
           visits: 1,
@@ -458,6 +530,7 @@
         nameInput.value = prof.name;
         bioDialog.close();
         saveState(state, `💾 Saved Bio for ${prof.name}!`);
+        broadcastCloudSync("bio_update", { profile: prof });
         renderProfileSupport();
         renderActiveList();
       });
@@ -471,6 +544,7 @@
           if (nameInput.value.trim().toLowerCase() === targetLower) nameInput.value = "";
           bioDialog.close();
           saveState(state, `🗑️ Permanently deleted profile: ${removed.name}`);
+          broadcastCloudSync("delete_profile", { name: removed.name });
           renderProfileSupport();
           renderActiveList();
         }
@@ -487,6 +561,8 @@
         const prof = findOrCreateProfile(clean, false);
         const lvl = getLevelInfo(prof.xp);
         const xpGain = isQuietHour(selectedHour) ? 100 : 50;
+        const isAlreadyActive = (state.attendanceLog || []).some(r => r.status === "active" && (r.studentName || "").toLowerCase() === prof.name.toLowerCase());
+
         previewEl.innerHTML = `
           <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">
             <div style="display:flex;align-items:center;gap:0.65rem;">
@@ -496,6 +572,7 @@
                   <span>${prof.name}</span>
                   <span class="badge badge-blue" style="font-size:0.62rem;">🪪 View Bio</span>
                 </button>
+                ${isAlreadyActive ? '<span class="badge badge-emerald" style="font-size:0.62rem;margin-left:0.25rem;">🟢 Currently Checked In</span>' : ''}
                 <div style="font-size:0.75rem;color:var(--text-secondary);margin-top:0.12rem;">
                   🎓 <strong>${prof.major}</strong> &bull; <em>${prof.hobbies}</em>
                 </div>
@@ -525,12 +602,15 @@
         }
         const chipsWrap = document.getElementById("m-quick-profile-chips");
         if (chipsWrap) {
-          chipsWrap.innerHTML = (state.studentProfiles || []).map(p => `
-            <button type="button" class="tutor-chip m-chip-select-student" data-name="${p.name.replace(/"/g, '&quot;')}" style="font-size:0.75rem;padding:0.22rem 0.55rem;display:inline-flex;align-items:center;gap:0.35rem;">
-              ${window.renderStudentAvatar(p, 20)}
-              <span>${p.name}</span>
-            </button>
-          `).join("");
+          chipsWrap.innerHTML = (state.studentProfiles || []).map(p => {
+            const isAct = (state.attendanceLog || []).some(r => r.status === "active" && (r.studentName || "").toLowerCase() === p.name.toLowerCase());
+            return `
+              <button type="button" class="tutor-chip m-chip-select-student ${isAct ? 'assigned' : ''}" data-name="${p.name.replace(/"/g, '&quot;')}" style="font-size:0.75rem;padding:0.22rem 0.55rem;display:inline-flex;align-items:center;gap:0.35rem;">
+                ${window.renderStudentAvatar(p, 20)}
+                <span>${p.name} ${isAct ? '🟢' : ''}</span>
+              </button>
+            `;
+          }).join("");
 
           chipsWrap.querySelectorAll(".m-chip-select-student").forEach(btn => {
             btn.addEventListener("click", e => {
@@ -549,29 +629,56 @@
         renderProfilePreview(nameInput.value);
       });
 
+      function performCheckoutById(id) {
+        state = loadState();
+        const rec = state.attendanceLog.find(x => x.id === id);
+        if (rec) {
+          const mins = rec.durationMinutes || 20;
+          rec.status = "completed";
+          rec.durationMinutes = mins;
+          rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+          rec.xpEarned = (rec.xpEarned || 50) + 100;
+          const prof = findOrCreateProfile(rec.studentName, true);
+          if (prof) {
+            prof.xp = (Number(prof.xp) || 0) + 100;
+            prof.totalMinutes = (Number(prof.totalMinutes) || 0) + mins;
+          }
+          saveState(state, `🎉 Checked out ${rec.studentName}! +100 XP earned!`);
+          broadcastCloudSync("checkout", { recordId: rec.id, studentName: rec.studentName, checkOutTime: rec.checkOutTime, durationMinutes: mins });
+          renderProfileSupport();
+          renderActiveList();
+        }
+      }
+
       function renderActiveList() {
         state = loadState();
+        const allActive = (state.attendanceLog || []).filter(r => r.status === "active");
+        const countPill = document.getElementById("m-active-count-pill");
+        if (countPill) countPill.textContent = String(allActive.length);
+
         const query = (searchOutInput ? searchOutInput.value : "").trim().toLowerCase();
-        const active = (state.attendanceLog || []).filter(r => {
-          if (r.status !== "active") return false;
+        const active = allActive.filter(r => {
           if (!query) return true;
           return (r.studentName || "").toLowerCase().includes(query) || (r.courseCode || "").toLowerCase().includes(query);
         });
         const wrap = document.getElementById("m-active-list");
         if (active.length === 0) {
-          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No active check-ins found. Switch to Check In above!</div>`;
+          wrap.innerHTML = `<div style="padding:1rem;text-align:center;color:var(--text-secondary);font-size:0.85rem;">No active check-ins found. Check in above!</div>`;
           return;
         }
         wrap.innerHTML = active.map(r => {
           const prof = findOrCreateProfile(r.studentName, false);
           return `
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.8rem;border:1px solid var(--border-color);border-radius:10px;margin-bottom:0.55rem;background:var(--bg-subtle);">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;padding:0.8rem;border:1px solid rgba(16,185,129,0.45);border-radius:10px;margin-bottom:0.55rem;background:var(--bg-subtle);">
               <div style="display:flex;align-items:center;gap:0.6rem;">
                 ${window.renderStudentAvatar(prof, 38)}
                 <div>
-                  <button type="button" class="student-bio-trigger m-active-bio-btn" data-name="${r.studentName.replace(/"/g, '&quot;')}">
-                    <span>${r.studentName}</span>
-                  </button>
+                  <div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;">
+                    <button type="button" class="student-bio-trigger m-active-bio-btn" data-name="${r.studentName.replace(/"/g, '&quot;')}">
+                      <span>${r.studentName}</span>
+                    </button>
+                    <span class="badge badge-emerald" style="font-size:0.6rem;">🟢 Checked In</span>
+                  </div>
                   <div style="font-size:0.74rem;color:var(--text-secondary);">${r.courseCode} (${r.lecturer}) &bull; In at ${r.checkInTime}</div>
                 </div>
               </div>
@@ -589,21 +696,7 @@
         wrap.querySelectorAll(".m-btn-checkout").forEach(btn => {
           btn.addEventListener("click", e => {
             const id = e.currentTarget.getAttribute("data-id");
-            const rec = state.attendanceLog.find(x => x.id === id);
-            if (rec) {
-              const mins = rec.durationMinutes || 20;
-              rec.status = "completed";
-              rec.durationMinutes = mins;
-              rec.checkOutTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-              rec.xpEarned = (rec.xpEarned || 50) + 100;
-              const prof = findOrCreateProfile(rec.studentName, true);
-              if (prof) {
-                prof.xp = (Number(prof.xp) || 0) + 100;
-                prof.totalMinutes = (Number(prof.totalMinutes) || 0) + mins;
-              }
-              saveState(state, `🎉 Checked out ${rec.studentName}! +100 XP earned!`);
-              renderActiveList();
-            }
+            performCheckoutById(id);
           });
         });
       }
@@ -624,10 +717,11 @@
           renderActiveList();
         } else {
           cardIn.style.display = "block";
-          cardOut.style.display = "none";
+          cardOut.style.display = "block"; // Always show active checked-in students below the check-in form too!
           btnModeIn.className = "mode-btn active-in";
           btnModeOut.className = "mode-btn";
           renderProfileSupport();
+          renderActiveList();
         }
       }
       btnModeIn.addEventListener("click", () => setMode("in"));
@@ -657,7 +751,7 @@
         const sub = prof.subject || "trig";
         const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-        state.attendanceLog.unshift({
+        const newRec = {
           id: "chk-" + Date.now(),
           studentName: prof.name,
           courseCode: prof.courseCode,
@@ -670,14 +764,65 @@
           durationMinutes: 20,
           xpEarned: xpGain,
           status: "active"
-        });
+        };
 
+        state.attendanceLog.unshift(newRec);
         if (state.hourlyArrivals[day] && state.hourlyArrivals[day][hr]) {
           state.hourlyArrivals[day][hr][sub] = (Number(state.hourlyArrivals[day][hr][sub]) || 0) + 1;
         }
+        try {
+          localStorage.setItem(LAST_STUDENT_KEY, prof.name);
+        } catch (err) {}
+
         saveState(state, `🎉 Checked in ${prof.name}! +${xpGain} XP ${quietBonus ? "(⚡ 2x Quiet Bonus!)" : ""}!`);
+        broadcastCloudSync("checkin", { record: newRec, profile: prof });
+        renderCheckedInBanner(newRec, prof);
         renderProfileSupport();
+        renderActiveList();
       });
+
+      // Subscribe to cross-device sync so phone & laptop stay in sync
+      function handleRemoteMessage(msgObj) {
+        if (!msgObj || !msgObj.id || seenEventIds.has(msgObj.id)) return;
+        seenEventIds.add(msgObj.id);
+        try {
+          const data = JSON.parse(msgObj.message || "{}");
+          if (!data || data.sender === DEVICE_ID) return;
+          state = loadState();
+          if (data.action === "checkin" && data.payload && data.payload.record) {
+            const rec = data.payload.record;
+            if (!state.attendanceLog.some(r => r.id === rec.id)) {
+              state.attendanceLog.unshift(rec);
+              const p = data.payload.profile;
+              if (p) {
+                const existing = state.studentProfiles.find(x => x.name.toLowerCase() === p.name.toLowerCase());
+                if (existing) Object.assign(existing, p);
+                else state.studentProfiles.unshift(p);
+              }
+              saveState(state);
+              renderProfileSupport();
+              renderActiveList();
+            }
+          } else if (data.action === "checkout" && data.payload) {
+            const rec = state.attendanceLog.find(r => r.id === data.payload.recordId || (r.status === "active" && r.studentName === data.payload.studentName));
+            if (rec && rec.status === "active") {
+              rec.status = "completed";
+              rec.checkOutTime = data.payload.checkOutTime || "Done";
+              rec.durationMinutes = data.payload.durationMinutes || 20;
+              saveState(state);
+              renderProfileSupport();
+              renderActiveList();
+            }
+          }
+        } catch (err) {}
+      }
+
+      try {
+        const es = new EventSource(SYNC_URL + "/sse");
+        es.onmessage = (e) => {
+          try { handleRemoteMessage(JSON.parse(e.data)); } catch (err) {}
+        };
+      } catch (e) {}
 
       const params = new URLSearchParams(window.location.search);
       if (params.get("mode") === "out") setMode("out");
